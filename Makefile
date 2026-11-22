@@ -5,4 +5,4 @@ editor: ted.c
 	$(CC) $(CFLAGS) ted.c -o ted
 
 clean:
-	rm -f editor
+	rm -f ted
