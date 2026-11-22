@@ -23,6 +23,7 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -35,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.0.2"
+#define TED_VERSION "0.0.3"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -50,7 +51,8 @@ enum editorKey {
     HOME_KEY,
     END_KEY,
     PAGE_UP,
-    PAGE_DOWN
+    PAGE_DOWN,
+    RESIZE_EVENT
 };
 
 enum editorHighlight {
@@ -103,6 +105,7 @@ struct editorConfig {
     time_t statusmsg_time;
     struct editorSyntax *syntax;
     struct termios orig_termios;
+    volatile sig_atomic_t resized;
 };
 
 struct editorConfig E;
@@ -111,7 +114,6 @@ struct editorConfig E;
 
 char *C_HL_extensions[] = { ".c", ".h", ".cpp", NULL };
 
-// Primary keywords vs. C types (suffixed with '|')
 char *C_HL_keywords[] = {
     "switch", "if", "while", "for", "break", "continue", "return", "else",
     "struct", "union", "typedef", "static", "enum", "class", "case",
@@ -181,7 +183,10 @@ int editorReadKey(void) {
     int nread;
     char c;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1) {
-        if (nread == -1 && errno != EAGAIN) {
+        if (E.resized) {
+            return RESIZE_EVENT;
+        }
+        if (nread == -1 && errno != EAGAIN && errno != EINTR) {
             die("read");
         }
     }
@@ -261,6 +266,29 @@ int getWindowSize(int *rows, int *cols) {
     return 0;
 }
 
+void editorHandleSigwinch(int sig) {
+    (void)sig;
+    E.resized = 1;
+}
+
+void editorUpdateWindowSize(void) {
+    if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
+        die("getWindowSize");
+    }
+    E.screenrows -= 2; // Reserve space for status bar and message bar
+
+    if (E.screenrows < 1) E.screenrows = 1;
+    if (E.screencols < 1) E.screencols = 1;
+
+    // Clamp scroll offsets so the viewport stays valid when shrinking
+    if (E.cy >= E.rowoff + E.screenrows) {
+        E.rowoff = E.cy - E.screenrows + 1;
+    }
+    if (E.rx >= E.coloff + E.screencols) {
+        E.coloff = E.rx - E.screencols + 1;
+    }
+}
+
 /*** syntax highlighting ***/
 
 int is_separator(int c) {
@@ -292,7 +320,7 @@ void editorUpdateSyntax(erow *row) {
         char c = row->render[i];
         unsigned char prev_hl = (i > 0) ? row->hl[i - 1] : HL_NORMAL;
 
-        // Single-line comments (ignored inside strings or multi-line comments)
+        // Single-line comments
         if (scs_len && !in_string && !in_comment) {
             if (!strncmp(&row->render[i], scs, scs_len)) {
                 memset(&row->hl[i], HL_COMMENT, row->rsize - i);
@@ -722,7 +750,6 @@ void editorDrawRows(struct abuf *ab) {
 
             for (int j = 0; j < len; j++) {
                 if (iscntrl(c[j])) {
-                    // Render non-printable control bytes as inverted glyphs
                     char sym = (c[j] <= 26) ? '@' + c[j] : '?';
                     abAppend(ab, "\x1b[7m", 4);
                     abAppend(ab, &sym, 1);
@@ -838,7 +865,11 @@ char *editorPrompt(char *prompt) {
         editorRefreshScreen();
 
         int c = editorReadKey();
-        if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
+        if (c == RESIZE_EVENT) {
+            E.resized = 0;
+            editorUpdateWindowSize();
+            continue;
+        } else if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
             if (buflen != 0) buf[--buflen] = '\0';
         } else if (c == '\x1b') {
             editorSetStatusMessage("");
@@ -905,6 +936,11 @@ void editorProcessKeypress(void) {
     int c = editorReadKey();
 
     switch (c) {
+        case RESIZE_EVENT:
+            E.resized = 0;
+            editorUpdateWindowSize();
+            return;
+
         case '\r':
             editorInsertNewline();
             break;
@@ -993,11 +1029,18 @@ void initEditor(void) {
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
     E.syntax = NULL;
+    E.resized = 0;
 
-    if (getWindowSize(&E.screenrows, &E.screencols) == -1) {
-        die("getWindowSize");
+    editorUpdateWindowSize();
+
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_handler = editorHandleSigwinch;
+    sigemptyset(&sa.sa_mask);
+    sa.sa_flags = 0;
+    if (sigaction(SIGWINCH, &sa, NULL) == -1) {
+        die("sigaction");
     }
-    E.screenrows -= 2;
 }
 
 int main(int argc, char *argv[]) {
