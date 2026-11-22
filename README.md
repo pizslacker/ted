@@ -1,2 +1,2 @@
-# ted
-Text EDitor
+# Text EDitor
+
