@@ -1,9 +1,17 @@
 # Text EDitor
 
-![TED-splash](images/TED-splash.png)
-
 - Zero dependencies
 - ~1031 LOC (_Lines-Of-Code_)
+- Centered ASCII splash banner
+- Live SIGWINCH window-resize handling
+- Dynamic line numbers
+- Live C syntax highlighting
+- Smart auto-indentation
+- and incremental search (Ctrl-F).
+
+![TED-splash](images/TED-splash.png)
+
+---
 
 ![TED-0.0.4](images/TED.png)
 
