@@ -36,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.2.0"
+#define TED_VERSION "0.4.0"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -47,6 +47,9 @@ enum editorKey {
     ARROW_RIGHT,
     ARROW_UP,
     ARROW_DOWN,
+    CTRL_ARROW_LEFT,
+    CTRL_ARROW_RIGHT,
+    CTRL_BACKSPACE,
     DEL_KEY,
     HOME_KEY,
     END_KEY,
@@ -219,9 +222,11 @@ int editorReadKey(void) {
     }
 
     if (c == '\x1b') {
-        char seq[3];
+        char seq[5];
 
         if (read(STDIN_FILENO, &seq[0], 1) != 1) return '\x1b';
+        if (seq[0] == '\x7f' || seq[0] == '\b') return CTRL_BACKSPACE;
+
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
 
         if (seq[0] == '[') {
@@ -237,6 +242,16 @@ int editorReadKey(void) {
                         case '7': return HOME_KEY;
                         case '8': return END_KEY;
                     }
+                } else if (seq[1] == '1' && seq[2] == ';') {
+                    // CSI 1;<mod><dir> (modifier 5 = Ctrl)
+                    if (read(STDIN_FILENO, &seq[3], 1) != 1) return '\x1b';
+                    if (read(STDIN_FILENO, &seq[4], 1) != 1) return '\x1b';
+                    if (seq[3] == '5') {
+                        switch (seq[4]) {
+                            case 'C': return CTRL_ARROW_RIGHT;
+                            case 'D': return CTRL_ARROW_LEFT;
+                        }
+                    }
                 }
             } else {
                 switch (seq[1]) {
@@ -250,12 +265,18 @@ int editorReadKey(void) {
             }
         } else if (seq[0] == 'O') {
             switch (seq[1]) {
+                case 'C': return CTRL_ARROW_RIGHT;
+                case 'D': return CTRL_ARROW_LEFT;
                 case 'H': return HOME_KEY;
                 case 'F': return END_KEY;
             }
         }
 
         return '\x1b';
+    }
+
+    if (c == CTRL_KEY('h')) {
+        return CTRL_BACKSPACE;
     }
 
     return c;
@@ -914,6 +935,69 @@ void editorDelChar(void) {
     }
 }
 
+void editorMoveWord(int key) {
+    if (key == CTRL_ARROW_LEFT) {
+        if (E.cx == 0) {
+            if (E.cy > 0) {
+                E.cy--;
+                E.cx = E.row[E.cy].size;
+            }
+            return;
+        }
+        erow *row = &E.row[E.cy];
+        // Step back over any whitespace/punctuation first, then over the word
+        while (E.cx > 0 && is_separator(row->chars[E.cx - 1])) {
+            E.cx--;
+        }
+        while (E.cx > 0 && !is_separator(row->chars[E.cx - 1])) {
+            E.cx--;
+        }
+    } else if (key == CTRL_ARROW_RIGHT) {
+        if (E.cy >= E.numrows) return;
+        erow *row = &E.row[E.cy];
+        if (E.cx >= row->size) {
+            if (E.cy < E.numrows - 1) {
+                E.cy++;
+                E.cx = 0;
+            }
+            return;
+        }
+        // Step forward over current word, then over trailing whitespace/punctuation
+        while (E.cx < row->size && !is_separator(row->chars[E.cx])) {
+            E.cx++;
+        }
+        while (E.cx < row->size && is_separator(row->chars[E.cx])) {
+            E.cx++;
+        }
+    }
+}
+
+void editorDelWord(void) {
+    if (E.cy == E.numrows) return;
+    if (E.cx == 0 && E.cy == 0) return;
+
+    // At start of line, join with previous line (standard Backspace behavior)
+    if (E.cx == 0) {
+        editorDelChar();
+        return;
+    }
+
+    erow *row = &E.row[E.cy];
+    int target_cx = E.cx;
+
+    while (target_cx > 0 && is_separator(row->chars[target_cx - 1])) {
+        target_cx--;
+    }
+    while (target_cx > 0 && !is_separator(row->chars[target_cx - 1])) {
+        target_cx--;
+    }
+
+    int count = E.cx - target_cx;
+    while (count-- > 0) {
+        editorDelChar();
+    }
+}
+
 /*** file i/o ***/
 
 char *editorRowsToString(int *buflen) {
@@ -1323,7 +1407,7 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int)) {
             E.resized = 0;
             editorUpdateWindowSize();
             continue;
-        } else if (c == DEL_KEY || c == CTRL_KEY('h') || c == BACKSPACE) {
+        } else if (c == DEL_KEY || c == CTRL_BACKSPACE || c == BACKSPACE) {
             if (buflen != 0) buf[--buflen] = '\0';
         } else if (c == '\x1b') {
             editorSetStatusMessage("");
@@ -1474,6 +1558,15 @@ void editorProcessKeypress(void) {
 
         case CTRL_KEY('l'):
         case '\x1b':
+            break;
+
+        case CTRL_BACKSPACE:
+            editorDelWord();
+            break;
+
+        case CTRL_ARROW_LEFT:
+        case CTRL_ARROW_RIGHT:
+            editorMoveWord(c);
             break;
 
         default:
