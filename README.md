@@ -18,6 +18,8 @@ a minimal terminal text editor in C
 
 ![TED-0.0.4](images/TED.png)
 
+## Architecture
+
 Building a text editor in C comes down to three key upfront architectural decisions:
 
   - **UI Backend**
