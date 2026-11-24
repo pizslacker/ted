@@ -36,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.1.0"
+#define TED_VERSION "0.2.0"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -81,6 +81,26 @@ struct editorSyntax {
     int flags;
 };
 
+enum editOpType {
+    OP_INSERT_CHAR,
+    OP_DELETE_CHAR,
+    OP_SPLIT_LINE,
+    OP_JOIN_LINE
+};
+
+typedef struct editOp {
+    enum editOpType type;
+    int cy;             // Target row index
+    int cx;             // Target column index
+    int ch;             // Character for INSERT_CHAR / DELETE_CHAR
+    char *indent;       // Auto-indent prefix inserted on SPLIT_LINE
+    int indent_len;     // Length of indent prefix
+    int before_cx;      // Cursor X before edit
+    int before_cy;      // Cursor Y before edit
+    int after_cx;       // Cursor X after edit
+    int after_cy;       // Cursor Y after edit
+} editOp;
+
 typedef struct erow {
     int idx;                // Row index within file (for multi-line state)
     int size;               // Length of raw chars
@@ -101,6 +121,12 @@ struct editorConfig {
     int numrows;
     erow *row;
     int dirty;
+    int saved_undo_top;             // Stack depth at last disk save
+    editOp *undo_stack;             // Dynamic array of recorded edits
+    int undo_top;                   // Number of active undoable operations
+    int undo_len;                   // Total valid entries (undo_top .. undo_len = redoable)
+    int undo_cap;                   // Allocated capacity of undo_stack
+    int in_undo_redo;               // Re-entrancy guard during replay
     char *filename;
     char statusmsg[80];
     time_t statusmsg_time;
@@ -573,21 +599,206 @@ void editorRowDelChar(erow *row, int at) {
     E.dirty++;
 }
 
+/*** undo / redo ***/
+
+void editorFreeEditOp(editOp *op) {
+    free(op->indent);
+    op->indent = NULL;
+}
+
+void editorClearUndoHistory(void) {
+    for (int i = 0; i < E.undo_len; i++) {
+        editorFreeEditOp(&E.undo_stack[i]);
+    }
+    free(E.undo_stack);
+    E.undo_stack = NULL;
+    E.undo_top = 0;
+    E.undo_len = 0;
+    E.undo_cap = 0;
+    E.saved_undo_top = 0;
+}
+
+void editorPushUndo(editOp op) {
+    if (E.in_undo_redo) return;
+
+    // Discard any redoable operations above current undo_top
+    for (int i = E.undo_top; i < E.undo_len; i++) {
+        editorFreeEditOp(&E.undo_stack[i]);
+    }
+    E.undo_len = E.undo_top;
+
+    // If we diverged past the saved checkpoint, saved state is no longer reachable
+    if (E.saved_undo_top > E.undo_top) {
+        E.saved_undo_top = -1;
+    }
+
+    if (E.undo_top == E.undo_cap) {
+        E.undo_cap = E.undo_cap == 0 ? 64 : E.undo_cap * 2;
+        E.undo_stack = realloc(E.undo_stack, sizeof(editOp) * E.undo_cap);
+    }
+
+    E.undo_stack[E.undo_top++] = op;
+    E.undo_len = E.undo_top;
+}
+
+void editorUndo(void) {
+    if (E.undo_top == 0) {
+        editorSetStatusMessage("Nothing to undo");
+        return;
+    }
+
+    E.in_undo_redo = 1;
+    editOp *op = &E.undo_stack[--E.undo_top];
+
+    switch (op->type) {
+        case OP_INSERT_CHAR:
+            editorRowDelChar(&E.row[op->cy], op->cx);
+            break;
+
+        case OP_DELETE_CHAR:
+            editorRowInsertChar(&E.row[op->cy], op->cx, op->ch);
+            break;
+
+        case OP_SPLIT_LINE: {
+            erow *next = &E.row[op->cy + 1];
+            char *tail = &next->chars[op->indent_len];
+            int tail_len = next->size - op->indent_len;
+            editorRowAppendString(&E.row[op->cy], tail, tail_len);
+            editorDelRow(op->cy + 1);
+            break;
+        }
+
+        case OP_JOIN_LINE: {
+            erow *prev = &E.row[op->cy - 1];
+            editorInsertRow(op->cy, &prev->chars[op->cx], prev->size - op->cx);
+            prev = &E.row[op->cy - 1];
+            prev->size = op->cx;
+            prev->chars[prev->size] = '\0';
+            editorUpdateRow(prev);
+            break;
+        }
+    }
+
+    E.cx = op->before_cx;
+    E.cy = op->before_cy;
+    E.dirty = (E.undo_top == E.saved_undo_top) ? 0 : 1;
+    E.in_undo_redo = 0;
+
+    editorSetStatusMessage("Undo (%d remaining)", E.undo_top);
+}
+
+void editorRedo(void) {
+    if (E.undo_top >= E.undo_len) {
+        editorSetStatusMessage("Nothing to redo");
+        return;
+    }
+
+    E.in_undo_redo = 1;
+    editOp *op = &E.undo_stack[E.undo_top++];
+
+    switch (op->type) {
+        case OP_INSERT_CHAR:
+            if (op->cy == E.numrows) {
+                editorInsertRow(E.numrows, "", 0);
+            }
+            editorRowInsertChar(&E.row[op->cy], op->cx, op->ch);
+            break;
+
+        case OP_DELETE_CHAR:
+            editorRowDelChar(&E.row[op->cy], op->cx);
+            break;
+
+        case OP_SPLIT_LINE: {
+            if (op->cy == E.numrows) {
+                editorInsertRow(op->cy, "", 0);
+            } else {
+                erow *row = &E.row[op->cy];
+                int tail_len = row->size - op->cx;
+                int new_len = op->indent_len + tail_len;
+                char *new_line = malloc(new_len + 1);
+
+                if (op->indent_len > 0) {
+                    memcpy(new_line, op->indent, op->indent_len);
+                }
+                memcpy(new_line + op->indent_len, &row->chars[op->cx], tail_len);
+                new_line[new_len] = '\0';
+
+                editorInsertRow(op->cy + 1, new_line, new_len);
+                free(new_line);
+
+                row = &E.row[op->cy];
+                row->size = op->cx;
+                row->chars[row->size] = '\0';
+                editorUpdateRow(row);
+            }
+            break;
+        }
+
+        case OP_JOIN_LINE: {
+            erow *row = &E.row[op->cy];
+            editorRowAppendString(&E.row[op->cy - 1], row->chars, row->size);
+            editorDelRow(op->cy);
+            break;
+        }
+    }
+
+    E.cx = op->after_cx;
+    E.cy = op->after_cy;
+    E.dirty = (E.undo_top == E.saved_undo_top) ? 0 : 1;
+    E.in_undo_redo = 0;
+
+    editorSetStatusMessage("Redo (%d available)", E.undo_len - E.undo_top);
+}
+
 /*** editor operations ***/
 
 void editorInsertChar(int c) {
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+
     if (E.cy == E.numrows) {
         editorInsertRow(E.numrows, "", 0);
     }
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
     E.cx++;
+
+    editOp op = {
+        .type = OP_INSERT_CHAR,
+        .cy = before_cy,
+        .cx = before_cx,
+        .ch = c,
+        .indent = NULL,
+        .indent_len = 0,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
 }
 
 void editorInsertNewline(void) {
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+
     if (E.cy == E.numrows) {
         editorInsertRow(E.cy, "", 0);
         E.cy++;
         E.cx = 0;
+
+        editOp op = {
+            .type = OP_SPLIT_LINE,
+            .cy = before_cy,
+            .cx = before_cx,
+            .ch = 0,
+            .indent = NULL,
+            .indent_len = 0,
+            .before_cx = before_cx,
+            .before_cy = before_cy,
+            .after_cx = E.cx,
+            .after_cy = E.cy
+        };
+        editorPushUndo(op);
         return;
     }
 
@@ -610,14 +821,22 @@ void editorInsertNewline(void) {
         extra_indent = TED_TAB_STOP;
     }
 
+    int total_indent = indent + extra_indent;
     int tail_len = row->size - E.cx;
-    int new_len = indent + extra_indent + tail_len;
+    int new_len = total_indent + tail_len;
     char *new_line = malloc(new_len + 1);
 
     memcpy(new_line, row->chars, indent);
     memset(new_line + indent, ' ', extra_indent);
-    memcpy(new_line + indent + extra_indent, &row->chars[E.cx], tail_len);
+    memcpy(new_line + total_indent, &row->chars[E.cx], tail_len);
     new_line[new_len] = '\0';
+
+    char *saved_indent = NULL;
+    if (total_indent > 0) {
+        saved_indent = malloc(total_indent + 1);
+        memcpy(saved_indent, new_line, total_indent);
+        saved_indent[total_indent] = '\0';
+    }
 
     editorInsertRow(E.cy + 1, new_line, new_len);
     free(new_line);
@@ -629,22 +848,69 @@ void editorInsertNewline(void) {
     editorUpdateRow(row);
 
     E.cy++;
-    E.cx = indent + extra_indent;
+    E.cx = total_indent;
+
+    editOp op = {
+        .type = OP_SPLIT_LINE,
+        .cy = before_cy,
+        .cx = before_cx,
+        .ch = 0,
+        .indent = saved_indent,
+        .indent_len = total_indent,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
 }
 
 void editorDelChar(void) {
     if (E.cy == E.numrows) return;
     if (E.cx == 0 && E.cy == 0) return;
 
+    int before_cx = E.cx;
+    int before_cy = E.cy;
     erow *row = &E.row[E.cy];
+
     if (E.cx > 0) {
+        int deleted_ch = (unsigned char)row->chars[E.cx - 1];
         editorRowDelChar(row, E.cx - 1);
         E.cx--;
+
+        editOp op = {
+            .type = OP_DELETE_CHAR,
+            .cy = before_cy,
+            .cx = E.cx,
+            .ch = deleted_ch,
+            .indent = NULL,
+            .indent_len = 0,
+            .before_cx = before_cx,
+            .before_cy = before_cy,
+            .after_cx = E.cx,
+            .after_cy = E.cy
+        };
+        editorPushUndo(op);
     } else {
-        E.cx = E.row[E.cy - 1].size;
+        int join_col = E.row[E.cy - 1].size;
+        E.cx = join_col;
         editorRowAppendString(&E.row[E.cy - 1], row->chars, row->size);
         editorDelRow(E.cy);
         E.cy--;
+
+        editOp op = {
+            .type = OP_JOIN_LINE,
+            .cy = before_cy,
+            .cx = join_col,
+            .ch = 0,
+            .indent = NULL,
+            .indent_len = 0,
+            .before_cx = before_cx,
+            .before_cy = before_cy,
+            .after_cx = E.cx,
+            .after_cy = E.cy
+        };
+        editorPushUndo(op);
     }
 }
 
@@ -673,6 +939,7 @@ void editorOpen(char *filename) {
     free(E.filename);
     E.filename = strdup(filename);
 
+    editorClearUndoHistory();
     editorSelectSyntaxHighlight();
 
     FILE *fp = fopen(filename, "r");
@@ -690,6 +957,7 @@ void editorOpen(char *filename) {
     }
     free(line);
     fclose(fp);
+    editorClearUndoHistory();
     E.dirty = 0;
 }
 
@@ -713,6 +981,7 @@ void editorSave(void) {
                 close(fd);
                 free(buf);
                 E.dirty = 0;
+                E.saved_undo_top = E.undo_top;
                 editorSetStatusMessage("%d bytes written to disk", len);
                 return;
             }
@@ -879,10 +1148,9 @@ void editorDrawRows(struct abuf *ab) {
     int ver_len = snprintf(version_line, sizeof(version_line),
                            "Text EDitor  v%s", TED_VERSION);
 
-    const char *help_line = "Ctrl-S: Save  |  Ctrl-F: Find  |  Ctrl-Q: Quit";
+    const char *help_line = "Ctrl-S: Save | Ctrl-F: Find | Ctrl-Z/Y: Undo/Redo | Ctrl-Q: Quit";
     const int help_len = (int)strlen(help_line);
 
-    // Total vertical block: 5 logo lines + 1 blank + 1 version + 1 blank + 1 help = 9 rows
     const int total_banner_rows = logo_rows + 4;
     int banner_start_y = (E.screenrows - total_banner_rows) / 2;
     if (banner_start_y < 1) banner_start_y = 1;
@@ -895,7 +1163,6 @@ void editorDrawRows(struct abuf *ab) {
                                 numwidth, "~");
             abAppend(ab, gbuf, glen);
 
-            // Render splash banner only when buffer is empty and terminal is wide/tall enough
             if (E.numrows == 0 &&
                 E.screenrows >= total_banner_rows + 2 &&
                 textcols >= help_len + 2) {
@@ -1157,6 +1424,14 @@ void editorProcessKeypress(void) {
             editorFind();
             break;
 
+        case CTRL_KEY('z'):
+            editorUndo();
+            break;
+
+        case CTRL_KEY('y'):
+            editorRedo();
+            break;
+
         case HOME_KEY:
             E.cx = 0;
             break;
@@ -1220,6 +1495,12 @@ void initEditor(void) {
     E.numrows = 0;
     E.row = NULL;
     E.dirty = 0;
+    E.saved_undo_top = 0;
+    E.undo_stack = NULL;
+    E.undo_top = 0;
+    E.undo_len = 0;
+    E.undo_cap = 0;
+    E.in_undo_redo = 0;
     E.filename = NULL;
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
@@ -1245,7 +1526,7 @@ int main(int argc, char *argv[]) {
         editorOpen(argv[1]);
     }
 
-    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
+    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-Z/Y = undo/redo | Ctrl-Q = quit");
 
     while (1) {
         editorRefreshScreen();
