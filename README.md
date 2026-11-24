@@ -9,6 +9,7 @@ Building a text editor in C comes down to three key upfront architectural decisi
 
   - **Buffer Data Structure**: An array of row structs (simplest for getting a working prototype on screen fast), a gap buffer (ideal for local cursor insertions), or a piece table / rope (best for large files and unlimited undo/redo).
       - `ted` uses a dynamic array of line structs (`erow *row`), where each line owns two heap-allocated flat character arrays (`chars` and `render`) plus a parallel syntax-highlight byte array (`hl`).
+      ***Memory Layout***
       ```text
       typedef struct erow {
           int idx;                // Line index in file
