@@ -1,5 +1,7 @@
 # Text EDitor
 
+![TED](images/TED.png)
+
 Building a text editor in C comes down to three key upfront architectural decisions:
 
   - **UI Backend**: A terminal interface using raw ANSI escape sequences (like the classic kilo editor, under 1,000 lines of standard C with zero dependencies), an `ncurses` TUI, or a graphical window using SDL2 or GTK.
