@@ -1,5 +1,8 @@
 # TinyEDitor
 
+a minimal terminal text editor in C
+
+## Features
 - Tiny self-contained editor
 - Zero external dependencies
 - ~1031 LOC (_Lines-Of-Code_)
