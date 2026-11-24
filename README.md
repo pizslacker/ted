@@ -1,5 +1,7 @@
 # Text EDitor
 
+![TED-splash](images/TED-splash.png)
+
 - Zero dependencies
 - ~1031 LOC (_Lines-Of-Code_)
 
