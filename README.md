@@ -1,4 +1,4 @@
-# **T**iny**ED**itor
+# tinyEDitor
 
 - Tiny self-contained editor
 - Zero dependencies
