@@ -1,6 +1,6 @@
 # TinyEDitor
 
-a minimal terminal text editor in standard C
+a minimal zero-dependency terminal text editor in standard C
 
 ![TED-splash](images/TED-splash.png)
 
