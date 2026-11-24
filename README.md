@@ -7,6 +7,7 @@
 - Dynamic line numbers
 - Live C syntax highlighting
 - Smart auto-indentation
+- Ctrl-Z/Y: Undo/Redo
 - and incremental search (Ctrl-F).
 
 ![TED-splash](images/TED-splash.png)
