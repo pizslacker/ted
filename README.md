@@ -7,7 +7,7 @@ a minimal terminal text editor in C
 ## Features
 - Tiny self-contained editor
 - Zero external dependencies
-- ~1031 LOC (_Lines-Of-Code_)
+- ~1307 LOC (_Lines-Of-Code_)
 - Centered ASCII splash banner
 - Live SIGWINCH window-resize handling
 - Dynamic line numbers
