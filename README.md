@@ -1,5 +1,6 @@
 # **T**iny**ED**itor
 
+- Tiny self-contained editor
 - Zero dependencies
 - ~1031 LOC (_Lines-Of-Code_)
 - Centered ASCII splash banner
