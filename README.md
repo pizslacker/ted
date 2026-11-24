@@ -1,4 +1,4 @@
-# Text EDitor
+# **T**iny**ED**itor
 
 - Zero dependencies
 - ~1031 LOC (_Lines-Of-Code_)
