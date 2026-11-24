@@ -30,6 +30,7 @@ Building a text editor in C comes down to three key upfront architectural decisi
    } erow;
   ```
   
+  - **Core Scope**
+      > Starting with a minimal viable editor (raw mode input, viewport scrolling, file I/O, and search) versus designing upfront for syntax highlighting and multiple buffers.
+  
   For `ted`'s current scope (source files up to tens of thousands of lines, live C syntax highlighting, and zero external dependencies), the array-of-`erows` design is the cleanest fit because line indexing, scrolling, and per-line syntax state map 1-to-1 to terminal rows.
-
-  - **Core Scope**: Starting with a minimal viable editor (raw mode input, viewport scrolling, file I/O, and search) versus designing upfront for syntax highlighting and multiple buffers.
