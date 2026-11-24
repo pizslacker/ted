@@ -1,7 +1,7 @@
 # tinyEDitor
 
 - Tiny self-contained editor
-- Zero dependencies
+- Zero external dependencies
 - ~1031 LOC (_Lines-Of-Code_)
 - Centered ASCII splash banner
 - Live SIGWINCH window-resize handling
