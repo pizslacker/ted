@@ -2,6 +2,8 @@
 
 a minimal terminal text editor in C
 
+![TED-splash](images/TED-splash.png)
+
 ## Features
 - Tiny self-contained editor
 - Zero external dependencies
@@ -13,10 +15,6 @@ a minimal terminal text editor in C
 - Smart auto-indentation
 - Ctrl-Z/Y: Undo/Redo
 - and incremental search (Ctrl-F).
-
-![TED-splash](images/TED-splash.png)
-
----
 
 ![TED-0.0.4](images/TED.png)
 
