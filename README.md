@@ -15,16 +15,16 @@ Building a text editor in C comes down to three key upfront architectural decisi
   `ted` uses a dynamic array of line structs (`erow *row`), where each line owns two heap-allocated flat character arrays (`chars` and `render`) plus a parallel syntax-highlight byte array (`hl`).
       
   ***Memory Layout***
-      ```text
-      typedef struct erow {
-          int idx;                // Line index in file
-          int size;               // Length of raw chars
-          int rsize;              // Length of rendered chars
-          char *chars;            // Raw line buffer (allocated per line)
-          char *render;           // Display buffer (tabs expanded to spaces)
-          unsigned char *hl;      // Syntax highlight token ID per rendered byte
-          int hl_open_comment;    // Multi-line comment state carried to next row
-      } erow;
-      ```
+  ```text
+  typedef struct erow {
+      int idx;                // Line index in file
+      int size;               // Length of raw chars
+      int rsize;              // Length of rendered chars
+      char *chars;            // Raw line buffer (allocated per line)
+      char *render;           // Display buffer (tabs expanded to spaces)
+      unsigned char *hl;      // Syntax highlight token ID per rendered byte
+      int hl_open_comment;    // Multi-line comment state carried to next row
+   } erow;
+  ```
 
   - **Core Scope**: Starting with a minimal viable editor (raw mode input, viewport scrolling, file I/O, and search) versus designing upfront for syntax highlighting and multiple buffers.
