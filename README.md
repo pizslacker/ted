@@ -1,6 +1,6 @@
 # Text EDitor
 
-![TED](images/TED.png)
+![TED-0.0.4](images/TED.png)
 
 Building a text editor in C comes down to three key upfront architectural decisions:
 
