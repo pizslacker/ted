@@ -14,6 +14,7 @@ a minimal terminal text editor in standard C
 - Live C syntax highlighting
 - Smart auto-indentation
 - Ctrl-Z/Y: Undo/Redo
+- Word-level navigation
 - and incremental search (Ctrl-F).
 
 ![TED-0.0.4](images/TED.png)
