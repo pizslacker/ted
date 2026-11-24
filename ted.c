@@ -864,6 +864,29 @@ void editorDrawRows(struct abuf *ab) {
     int textcols = E.screencols - gutter;
     if (textcols < 0) textcols = 0;
 
+    // Classic slant-style ASCII banner (all lines exact width: 22 chars)
+    static const char *logo[] = {
+        "  _            _      ",
+        " | |_ ___   __| |     ",
+        " | __/ _ \\ / _` |     ",
+        " | ||  __/| (_| |     ",
+        "  \\__\\___| \\__,_|     "
+    };
+    const int logo_rows = (int)(sizeof(logo) / sizeof(logo[0]));
+    const int logo_width = 22;
+
+    char version_line[64];
+    int ver_len = snprintf(version_line, sizeof(version_line),
+                           "Text EDitor  v%s", TED_VERSION);
+
+    const char *help_line = "Ctrl-S: Save  |  Ctrl-F: Find  |  Ctrl-Q: Quit";
+    const int help_len = (int)strlen(help_line);
+
+    // Total vertical block: 5 logo lines + 1 blank + 1 version + 1 blank + 1 help = 9 rows
+    const int total_banner_rows = logo_rows + 4;
+    int banner_start_y = (E.screenrows - total_banner_rows) / 2;
+    if (banner_start_y < 1) banner_start_y = 1;
+
     for (int y = 0; y < E.screenrows; y++) {
         int filerow = y + E.rowoff;
         if (filerow >= E.numrows) {
@@ -872,16 +895,31 @@ void editorDrawRows(struct abuf *ab) {
                                 numwidth, "~");
             abAppend(ab, gbuf, glen);
 
-            if (E.numrows == 0 && y == E.screenrows / 3) {
-                char welcome[80];
-                int welcomelen = snprintf(welcome, sizeof(welcome),
-                                          "ted -- Text EDitor v%s", TED_VERSION);
-                if (welcomelen > textcols) welcomelen = textcols;
+            // Render splash banner only when buffer is empty and terminal is wide/tall enough
+            if (E.numrows == 0 &&
+                E.screenrows >= total_banner_rows + 2 &&
+                textcols >= help_len + 2) {
+                int rel_y = y - banner_start_y;
 
-                int padding = (textcols - welcomelen) / 2;
-                while (padding-- > 0) abAppend(ab, " ", 1);
-
-                abAppend(ab, welcome, welcomelen);
+                if (rel_y >= 0 && rel_y < logo_rows) {
+                    int pad = (textcols - logo_width) / 2;
+                    while (pad-- > 0) abAppend(ab, " ", 1);
+                    abAppend(ab, "\x1b[1;36m", 7); // Bold cyan
+                    abAppend(ab, logo[rel_y], logo_width);
+                    abAppend(ab, "\x1b[0m", 4);
+                } else if (rel_y == logo_rows + 1) {
+                    int pad = (textcols - ver_len) / 2;
+                    while (pad-- > 0) abAppend(ab, " ", 1);
+                    abAppend(ab, "\x1b[1;37m", 7); // Bold white
+                    abAppend(ab, version_line, ver_len);
+                    abAppend(ab, "\x1b[0m", 4);
+                } else if (rel_y == logo_rows + 3) {
+                    int pad = (textcols - help_len) / 2;
+                    while (pad-- > 0) abAppend(ab, " ", 1);
+                    abAppend(ab, "\x1b[90m", 5); // Dim gray
+                    abAppend(ab, help_line, help_len);
+                    abAppend(ab, "\x1b[0m", 4);
+                }
             }
         } else {
             char gbuf[32];
