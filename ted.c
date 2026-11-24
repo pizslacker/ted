@@ -36,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.0.4"
+#define TED_VERSION "0.1.0"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
