@@ -1,5 +1,8 @@
 # Text EDitor
 
+- Zero dependencies
+- ~1000 LOC (_Lines-Of-Code_)
+
 ![TED-0.0.4](images/TED.png)
 
 Building a text editor in C comes down to three key upfront architectural decisions:
