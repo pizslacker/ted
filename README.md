@@ -1,7 +1,7 @@
 # Text EDitor
 
 - Zero dependencies
-- ~1000 LOC (_Lines-Of-Code_)
+- ~1031 LOC (_Lines-Of-Code_)
 
 ![TED-0.0.4](images/TED.png)
 
