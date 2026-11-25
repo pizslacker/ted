@@ -19,7 +19,7 @@ minimal zero-dependency terminal text editor in standard C
 - Word-level navigation
 - and incremental search (Ctrl-F).
 
-![TED-0.0.4](images/TED.png)
+![TED-0.7.0](images/TED.png)
 
 ## Architecture
 
