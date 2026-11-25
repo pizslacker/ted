@@ -1,19 +1,20 @@
 # TinyEDitor
 
-a minimal terminal text editor in standard C
+minimal zero-dependency terminal text editor in standard C
 
 ![TED-splash](images/TED-splash.png)
 
 ## Features
 - Tiny self-contained editor
 - Zero external dependencies
-- ~1307 LOC (_Lines-Of-Code_)
+- ~1390 LOC (_Lines-Of-Code_)
 - Centered ASCII splash banner
 - Live SIGWINCH window-resize handling
 - Dynamic line numbers
 - Live C syntax highlighting
 - Smart auto-indentation
 - Ctrl-Z/Y: Undo/Redo
+- Word-level navigation
 - and incremental search (Ctrl-F).
 
 ![TED-0.0.4](images/TED.png)
