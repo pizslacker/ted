@@ -13,6 +13,7 @@ minimal zero-dependency terminal text editor in standard C
 - Dynamic line numbers
 - Live C syntax highlighting
 - Smart auto-indentation
+- Tab/Shift-Tab: Indent/Outdent
 - Ctrl-Z/Y: Undo/Redo
 - Ctrl-G: GOTO line
 - Word-level navigation
