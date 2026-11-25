@@ -2,7 +2,7 @@
 
 minimal zero-dependency terminal text editor in standard C
 
-![TED-splash](images/TED-splash.png)
+![TED-splash-0.7.0](images/TED-splash.png)
 
 ## Features
 - Tiny self-contained editor
