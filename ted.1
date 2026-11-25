@@ -1,0 +1,97 @@
+.TH TED 1 "November 2026" "ted 0.4.0" "User Commands"
+.SH NAME
+tinyEDitor \- minimal zero-dependency terminal text editor
+.SH SYNOPSIS
+.B ted
+.RI [ file ]
+.SH DESCRIPTION
+.B ted
+is a lightweight, zero-dependency terminal text editor written in C99 using raw
+.BR termios (3)
+input and ANSI escape sequences. If
+.I file
+is specified,
+.B ted
+opens it for editing; otherwise, it starts with an empty buffer and displays a centered ASCII splash banner until text is entered.
+.PP
+Features include C/C++ syntax highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, a dynamic line-number gutter, and live terminal window resizing via
+.BR SIGWINCH .
+.SH KEYBINDINGS
+.SS File & Application Control
+.TP
+.B Ctrl-S
+Save the current buffer to disk. Prompts for a filename if the buffer has not been named yet.
+.TP
+.B Ctrl-Q
+Quit
+.BR ted .
+If the buffer contains unsaved changes, pressing
+.B Ctrl-Q
+three times in succession is required to discard modifications and exit.
+.TP
+.B Ctrl-F
+Enter incremental search mode. Type a query to jump to matches in real time; use
+.B Up / Left
+and
+.B Down / Right
+arrow keys to cycle backward and forward through matches,
+.B Enter
+to confirm the jump, or
+.B Esc
+to cancel and restore the original cursor position.
+.SS Editing & History
+.TP
+.B Ctrl-Z
+Undo the last character insertion, deletion, line split, or line join.
+.TP
+.B Ctrl-Y
+Redo the most recently undone edit.
+.TP
+.B Enter
+Insert a newline, preserving the current line's leading indentation and adding an extra 4-space indent level if the line ends with
+.BR { .
+.TP
+.B Backspace
+Delete the character before the cursor, or merge the current line onto the end of the previous line when at column 1.
+.TP
+.B Ctrl-Backspace / Ctrl-H
+Delete the previous word (or delimiter run) before the cursor.
+.TP
+.B Delete
+Delete the character under the cursor.
+.SS Navigation
+.TP
+.B Arrow Keys
+Move the cursor one character or line at a time, wrapping across line boundaries at the start and end of lines.
+.TP
+.B Ctrl-Left / Ctrl-Right
+Jump backward or forward by one word.
+.TP
+.B Home / End
+Move the cursor to the beginning or end of the current line.
+.TP
+.B Page Up / Page Down
+Scroll the viewport up or down by one full screen height.
+.SH SYNTAX HIGHLIGHTING
+.B ted
+automatically enables C-family syntax highlighting (keywords, preprocessor directives, primitive types, strings, character literals, numbers, and single-line or multi-line comments) when editing files ending in
+.BR .c ,
+.BR .h ,
+or
+.BR .cpp .
+.SH EXIT STATUS
+.TP
+.B 0
+Normal exit via
+.BR Ctrl-Q .
+.TP
+.B 1
+A fatal terminal or file I/O error occurred (reported via
+.BR perror (3)
+before exiting).
+.SH AUTHOR
+Written by k!M (pizslacker).
+.SH SEE ALSO
+.BR vi (1),
+.BR nano (1),
+.BR termios (3)

@@ -1612,11 +1612,59 @@ void initEditor(void) {
     }
 }
 
+/*** cli ***/
+
+void editorPrintUsage(const char *progname) {
+    printf("Usage: %s [OPTION]... [FILE]\n"
+           "Minimal zero-dependency terminal text editor.\n\n"
+           "Options:\n"
+           "  -h, --help       Display this help message and exit\n"
+           "  -v, --version    Output version information and exit\n\n"
+           "Keybindings:\n"
+           "  Ctrl-S           Save buffer to disk\n"
+           "  Ctrl-F           Incremental search (Arrows to cycle, Esc to cancel)\n"
+           "  Ctrl-Z / Ctrl-Y  Undo / Redo\n"
+           "  Ctrl-Left/Right  Jump backward / forward by word\n"
+           "  Ctrl-Backspace   Delete previous word\n"
+           "  Ctrl-Q           Quit (press 3x to discard unsaved changes)\n",
+           progname);
+}
+
+void editorPrintVersion(void) {
+    printf("ted %s\n"
+           "Written by k!M (pizslacker)\n",
+           TED_VERSION);
+}
+
 int main(int argc, char *argv[]) {
+    const char *filename = NULL;
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            editorPrintUsage(argv[0]);
+            return 0;
+        } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
+            editorPrintVersion();
+            return 0;
+        } else if (strcmp(argv[i], "--") == 0) {
+            if (i + 1 < argc) {
+                filename = argv[i + 1];
+            }
+            break;
+        } else if (argv[i][0] == '-' && argv[i][1] != '\0') {
+            fprintf(stderr, "%s: unrecognized option '%s'\n"
+                            "Try '%s --help' for more information.\n",
+                    argv[0], argv[i], argv[0]);
+            return 1;
+        } else {
+            filename = argv[i];
+        }
+    }
+
     enableRawMode();
     initEditor();
-    if (argc >= 2) {
-        editorOpen(argv[1]);
+    if (filename != NULL) {
+        editorOpen((char *)filename);
     }
 
     editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-Z/Y = undo/redo | Ctrl-Q = quit");
