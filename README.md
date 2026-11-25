@@ -14,6 +14,7 @@ minimal zero-dependency terminal text editor in standard C
 - Live C syntax highlighting
 - Smart auto-indentation
 - Ctrl-Z/Y: Undo/Redo
+- Ctrl-G: GOTO line
 - Word-level navigation
 - and incremental search (Ctrl-F).
 
