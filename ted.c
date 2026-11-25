@@ -36,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.7.0"
+#define TED_VERSION "0.7.1"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -132,7 +132,7 @@ struct editorConfig {
     int undo_cap;                   // Allocated capacity of undo_stack
     int in_undo_redo;               // Re-entrancy guard during replay
     char *filename;
-    char statusmsg[80];
+    char statusmsg[93];
     time_t statusmsg_time;
     struct editorSyntax *syntax;
     struct termios orig_termios;
