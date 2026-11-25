@@ -36,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.5.0"
+#define TED_VERSION "0.6.0"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -173,6 +173,7 @@ struct editorSyntax HLDB[] = {
 void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen(void);
 char *editorPrompt(char *prompt, void (*callback)(char *, int));
+int editorRowCxToRx(erow *row, int cx);
 
 /*** terminal ***/
 
@@ -502,6 +503,69 @@ void editorSelectSyntaxHighlight(void) {
             i++;
         }
     }
+}
+
+int editorFindMatchingBracket(int *out_row, int *out_rx) {
+    if (E.cy >= E.numrows) return 0;
+    erow *row = &E.row[E.cy];
+    if (E.cx >= row->size) return 0;
+
+    char open_ch = row->chars[E.cx];
+    char close_ch = '\0';
+    int dir = 0;
+
+    switch (open_ch) {
+        case '(': close_ch = ')'; dir = 1; break;
+        case '[': close_ch = ']'; dir = 1; break;
+        case '{': close_ch = '}'; dir = 1; break;
+        case ')': close_ch = '('; dir = -1; break;
+        case ']': close_ch = '['; dir = -1; break;
+        case '}': close_ch = '{'; dir = -1; break;
+        default: return 0;
+    }
+
+    // Ignore delimiters inside strings or comments
+    int cur_rx = editorRowCxToRx(row, E.cx);
+    if (cur_rx < row->rsize && row->hl != NULL) {
+        unsigned char tok = row->hl[cur_rx];
+        if (tok == HL_STRING || tok == HL_COMMENT || tok == HL_MLCOMMENT) {
+            return 0;
+        }
+    }
+
+    int depth = 1;
+    int r = E.cy;
+    int c = E.cx + dir;
+
+    while (r >= 0 && r < E.numrows) {
+        erow *cur = &E.row[r];
+        while (c >= 0 && c < cur->size) {
+            char ch = cur->chars[c];
+            if (ch == open_ch || ch == close_ch) {
+                int rx = editorRowCxToRx(cur, c);
+                unsigned char tok = (rx < cur->rsize && cur->hl) ? cur->hl[rx] : HL_NORMAL;
+                if (tok != HL_STRING && tok != HL_COMMENT && tok != HL_MLCOMMENT) {
+                    if (ch == open_ch) {
+                        depth++;
+                    } else {
+                        depth--;
+                        if (depth == 0) {
+                            *out_row = r;
+                            *out_rx = rx;
+                            return 1;
+                        }
+                    }
+                }
+            }
+            c += dir;
+        }
+        r += dir;
+        if (r >= 0 && r < E.numrows) {
+            c = (dir == 1) ? 0 : (E.row[r].size - 1);
+        }
+    }
+
+    return 0;
 }
 
 /*** row operations ***/
@@ -945,7 +1009,6 @@ void editorMoveWord(int key) {
             return;
         }
         erow *row = &E.row[E.cy];
-        // Step back over any whitespace/punctuation first, then over the word
         while (E.cx > 0 && is_separator(row->chars[E.cx - 1])) {
             E.cx--;
         }
@@ -962,7 +1025,6 @@ void editorMoveWord(int key) {
             }
             return;
         }
-        // Step forward over current word, then over trailing whitespace/punctuation
         while (E.cx < row->size && !is_separator(row->chars[E.cx])) {
             E.cx++;
         }
@@ -976,7 +1038,6 @@ void editorDelWord(void) {
     if (E.cy == E.numrows) return;
     if (E.cx == 0 && E.cy == 0) return;
 
-    // At start of line, join with previous line (standard Backspace behavior)
     if (E.cx == 0) {
         editorDelChar();
         return;
@@ -1077,7 +1138,7 @@ void editorSave(void) {
     editorSetStatusMessage("Can't save! I/O error: %s", strerror(errno));
 }
 
-/*** find ***/
+/*** find & navigation ***/
 
 void editorFindCallback(char *query, int key) {
     static int last_match = -1;
@@ -1169,7 +1230,6 @@ void editorGotoLine(void) {
     errno = 0;
     long line = strtol(input, &endptr, 10);
 
-    // Reject non-numeric input or trailing garbage
     while (*endptr == ' ' || *endptr == '\t') endptr++;
     if (errno != 0 || endptr == input || *endptr != '\0') {
         editorSetStatusMessage("Invalid line number: '%s'", input);
@@ -1179,14 +1239,12 @@ void editorGotoLine(void) {
 
     free(input);
 
-    // Clamp to valid 1-based range [1, E.numrows]
     if (line < 1) line = 1;
     if (line > E.numrows) line = E.numrows;
 
     E.cy = (int)(line - 1);
     E.cx = 0;
 
-    // Center the target line vertically in the viewport when possible
     if (E.cy < E.rowoff || E.cy >= E.rowoff + E.screenrows) {
         E.rowoff = E.cy - (E.screenrows / 2);
         if (E.rowoff < 0) E.rowoff = 0;
@@ -1263,6 +1321,9 @@ void editorDrawRows(struct abuf *ab) {
     int textcols = E.screencols - gutter;
     if (textcols < 0) textcols = 0;
 
+    int match_row = -1, match_rx = -1;
+    int has_match = editorFindMatchingBracket(&match_row, &match_rx);
+
     // Classic slant-style ASCII banner (all lines exact width: 22 chars)
     static const char *logo[] = {
         "  _            _      ",
@@ -1276,7 +1337,7 @@ void editorDrawRows(struct abuf *ab) {
 
     char version_line[64];
     int ver_len = snprintf(version_line, sizeof(version_line),
-                           "TinyEDitor  v%s", TED_VERSION);
+                           "Text EDitor  v%s", TED_VERSION);
 
     const char *help_line = "Ctrl-S: Save | Ctrl-F: Find | Ctrl-G: Goto | Ctrl-Z/Y: Undo/Redo | Ctrl-Q: Quit";
     const int help_len = (int)strlen(help_line);
@@ -1333,7 +1394,21 @@ void editorDrawRows(struct abuf *ab) {
             int current_color = -1;
 
             for (int j = 0; j < len; j++) {
-                if (iscntrl(c[j])) {
+                int abs_rx = j + E.coloff;
+                int is_bracket = has_match &&
+                    ((filerow == E.cy && abs_rx == E.rx) ||
+                     (filerow == match_row && abs_rx == match_rx));
+
+                if (is_bracket) {
+                    abAppend(ab, "\x1b[1;7m", 6); // Bold + reverse video
+                    abAppend(ab, &c[j], 1);
+                    abAppend(ab, "\x1b[22;27m", 8);
+                    if (current_color != -1) {
+                        char buf[16];
+                        int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", current_color);
+                        abAppend(ab, buf, clen);
+                    }
+                } else if (iscntrl(c[j])) {
                     char sym = (c[j] <= 26) ? '@' + c[j] : '?';
                     abAppend(ab, "\x1b[7m", 4);
                     abAppend(ab, &sym, 1);
@@ -1577,10 +1652,13 @@ void editorProcessKeypress(void) {
             break;
 
         case BACKSPACE:
-        case CTRL_KEY('h'):
         case DEL_KEY:
             if (c == DEL_KEY) editorMoveCursor(ARROW_RIGHT);
             editorDelChar();
+            break;
+
+        case CTRL_BACKSPACE:
+            editorDelWord();
             break;
 
         case PAGE_UP:
@@ -1606,17 +1684,13 @@ void editorProcessKeypress(void) {
             editorMoveCursor(c);
             break;
 
-        case CTRL_KEY('l'):
-        case '\x1b':
-            break;
-
-        case CTRL_BACKSPACE:
-            editorDelWord();
-            break;
-
         case CTRL_ARROW_LEFT:
         case CTRL_ARROW_RIGHT:
             editorMoveWord(c);
+            break;
+
+        case CTRL_KEY('l'):
+        case '\x1b':
             break;
 
         default:
@@ -1627,7 +1701,30 @@ void editorProcessKeypress(void) {
     quit_times = TED_QUIT_TIMES;
 }
 
-/*** init ***/
+/*** cli & init ***/
+
+void editorPrintUsage(const char *progname) {
+    printf("Usage: %s [OPTION]... [FILE]\n"
+           "Minimal zero-dependency terminal text editor.\n\n"
+           "Options:\n"
+           "  -h, --help       Display this help message and exit\n"
+           "  -v, --version    Output version information and exit\n\n"
+           "Keybindings:\n"
+           "  Ctrl-S           Save buffer to disk\n"
+           "  Ctrl-F           Incremental search (Arrows to cycle, Esc to cancel)\n"
+           "  Ctrl-G           Jump to a specific line number\n"
+           "  Ctrl-Z / Ctrl-Y  Undo / Redo\n"
+           "  Ctrl-Left/Right  Jump backward / forward by word\n"
+           "  Ctrl-Backspace   Delete previous word\n"
+           "  Ctrl-Q           Quit (press 3x to discard unsaved changes)\n",
+           progname);
+}
+
+void editorPrintVersion(void) {
+    printf("ted %s\n"
+           "Written by k!M (pizslacker)\n",
+           TED_VERSION);
+}
 
 void initEditor(void) {
     E.cx = 0;
@@ -1660,31 +1757,6 @@ void initEditor(void) {
     if (sigaction(SIGWINCH, &sa, NULL) == -1) {
         die("sigaction");
     }
-}
-
-/*** cli ***/
-
-void editorPrintUsage(const char *progname) {
-    printf("Usage: %s [OPTION]... [FILE]\n"
-           "Minimal zero-dependency terminal text editor.\n\n"
-           "Options:\n"
-           "  -h, --help       Display this help message and exit\n"
-           "  -v, --version    Output version information and exit\n\n"
-           "Keybindings:\n"
-           "  Ctrl-S           Save buffer to disk\n"
-           "  Ctrl-F           Incremental search (Arrows to cycle, Esc to cancel)\n"
-           "  Ctrl-G           Jump to a specific line number\n"
-           "  Ctrl-Z / Ctrl-Y  Undo / Redo\n"
-           "  Ctrl-Left/Right  Jump backward / forward by word\n"
-           "  Ctrl-Backspace   Delete previous word\n"
-           "  Ctrl-Q           Quit (press 3x to discard unsaved changes)\n",
-           progname);
-}
-
-void editorPrintVersion(void) {
-    printf("ted %s\n"
-           "Written by k!M (pizslacker)\n",
-           TED_VERSION);
 }
 
 int main(int argc, char *argv[]) {
