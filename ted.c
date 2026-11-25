@@ -1153,6 +1153,52 @@ void editorFind(void) {
     }
 }
 
+void editorGotoLine(void) {
+    if (E.numrows == 0) {
+        editorSetStatusMessage("Buffer is empty");
+        return;
+    }
+
+    char prompt[64];
+    snprintf(prompt, sizeof(prompt), "Go to line (1-%d): %%s (ESC to cancel)", E.numrows);
+
+    char *input = editorPrompt(prompt, NULL);
+    if (input == NULL) return;
+
+    char *endptr;
+    errno = 0;
+    long line = strtol(input, &endptr, 10);
+
+    // Reject non-numeric input or trailing garbage
+    while (*endptr == ' ' || *endptr == '\t') endptr++;
+    if (errno != 0 || endptr == input || *endptr != '\0') {
+        editorSetStatusMessage("Invalid line number: '%s'", input);
+        free(input);
+        return;
+    }
+
+    free(input);
+
+    // Clamp to valid 1-based range [1, E.numrows]
+    if (line < 1) line = 1;
+    if (line > E.numrows) line = E.numrows;
+
+    E.cy = (int)(line - 1);
+    E.cx = 0;
+
+    // Center the target line vertically in the viewport when possible
+    if (E.cy < E.rowoff || E.cy >= E.rowoff + E.screenrows) {
+        E.rowoff = E.cy - (E.screenrows / 2);
+        if (E.rowoff < 0) E.rowoff = 0;
+        if (E.rowoff > E.numrows - E.screenrows) {
+            E.rowoff = E.numrows - E.screenrows;
+            if (E.rowoff < 0) E.rowoff = 0;
+        }
+    }
+
+    editorSetStatusMessage("Jumped to line %ld", line);
+}
+
 /*** append buffer ***/
 
 struct abuf {
@@ -1232,7 +1278,7 @@ void editorDrawRows(struct abuf *ab) {
     int ver_len = snprintf(version_line, sizeof(version_line),
                            "TinyEDitor  v%s", TED_VERSION);
 
-    const char *help_line = "Ctrl-S: Save | Ctrl-F: Find | Ctrl-Z/Y: Undo/Redo | Ctrl-Q: Quit";
+    const char *help_line = "Ctrl-S: Save | Ctrl-F: Find | Ctrl-G: Goto | Ctrl-Z/Y: Undo/Redo | Ctrl-Q: Quit";
     const int help_len = (int)strlen(help_line);
 
     const int total_banner_rows = logo_rows + 4;
@@ -1508,6 +1554,10 @@ void editorProcessKeypress(void) {
             editorFind();
             break;
 
+        case CTRL_KEY('g'):
+            editorGotoLine();
+            break;
+
         case CTRL_KEY('z'):
             editorUndo();
             break;
@@ -1623,6 +1673,7 @@ void editorPrintUsage(const char *progname) {
            "Keybindings:\n"
            "  Ctrl-S           Save buffer to disk\n"
            "  Ctrl-F           Incremental search (Arrows to cycle, Esc to cancel)\n"
+           "  Ctrl-G           Jump to a specific line number\n"
            "  Ctrl-Z / Ctrl-Y  Undo / Redo\n"
            "  Ctrl-Left/Right  Jump backward / forward by word\n"
            "  Ctrl-Backspace   Delete previous word\n"
@@ -1667,7 +1718,7 @@ int main(int argc, char *argv[]) {
         editorOpen((char *)filename);
     }
 
-    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-Z/Y = undo/redo | Ctrl-Q = quit");
+    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-G = goto | Ctrl-Z/Y = undo/redo | Ctrl-Q = quit");
 
     while (1) {
         editorRefreshScreen();
