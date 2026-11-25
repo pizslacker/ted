@@ -1398,7 +1398,7 @@ void editorDrawRows(struct abuf *ab) {
 
     char version_line[64];
     int ver_len = snprintf(version_line, sizeof(version_line),
-                           "Text EDitor  v%s", TED_VERSION);
+                           "TinyEDitor  v%s", TED_VERSION);
 
     const char *help_line = "Ctrl-S: Save | Ctrl-F: Find | Ctrl-G: Goto | Ctrl-Z/Y: Undo/Redo | Ctrl-Q: Quit";
     const int help_len = (int)strlen(help_line);
