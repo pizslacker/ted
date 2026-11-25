@@ -15,9 +15,9 @@ Minimal zero-dependency terminal text editor in standard C.
 - Smart auto-indentation
 - Tab/Shift-Tab: Indent/Outdent
 - Ctrl-Z/Y: Undo/Redo
+- Ctrl-F: Incremental Search
 - Ctrl-G: GOTO line
 - Word-level navigation
-- and incremental search (Ctrl-F).
 
 ![TED-0.7.0](images/TED.png)
 
