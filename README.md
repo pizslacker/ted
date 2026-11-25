@@ -7,13 +7,14 @@ minimal zero-dependency terminal text editor in standard C
 ## Features
 - Tiny self-contained editor
 - Zero external dependencies
-- ~1433 LOC (_Lines-Of-Code_)
+- ~1537 LOC (_Lines-Of-Code_)
 - Centered ASCII splash banner
 - Live SIGWINCH window-resize handling
 - Dynamic line numbers
 - Live C syntax highlighting
 - Smart auto-indentation
 - Ctrl-Z/Y: Undo/Redo
+- Ctrl-G: GOTO line
 - Word-level navigation
 - and incremental search (Ctrl-F).
 
