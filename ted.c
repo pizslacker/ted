@@ -36,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.6.0"
+#define TED_VERSION "0.7.0"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -50,6 +50,7 @@ enum editorKey {
     CTRL_ARROW_LEFT,
     CTRL_ARROW_RIGHT,
     CTRL_BACKSPACE,
+    SHIFT_TAB,
     DEL_KEY,
     HOME_KEY,
     END_KEY,
@@ -242,6 +243,7 @@ int editorReadKey(void) {
                         case '6': return PAGE_DOWN;
                         case '7': return HOME_KEY;
                         case '8': return END_KEY;
+                        case 'Z': return SHIFT_TAB;
                     }
                 } else if (seq[1] == '1' && seq[2] == ';') {
                     // CSI 1;<mod><dir> (modifier 5 = Ctrl)
@@ -1059,6 +1061,65 @@ void editorDelWord(void) {
     }
 }
 
+void editorIndent(void) {
+    // Insert spaces up to the next TED_TAB_STOP boundary
+    int spaces = TED_TAB_STOP - (E.cx % TED_TAB_STOP);
+    for (int i = 0; i < spaces; i++) {
+        editorInsertChar(' ');
+    }
+}
+
+void editorOutdent(void) {
+    if (E.cy >= E.numrows) return;
+    erow *row = &E.row[E.cy];
+    if (row->size == 0) return;
+
+    int removed = 0;
+    if (row->chars[0] == '\t') {
+        editorRowDelChar(row, 0);
+        editOp op = {
+            .type = OP_DELETE_CHAR,
+            .cy = E.cy,
+            .cx = 0,
+            .ch = '\t',
+            .indent = NULL,
+            .indent_len = 0,
+            .before_cx = E.cx,
+            .before_cy = E.cy,
+            .after_cx = E.cx > 0 ? E.cx - 1 : 0,
+            .after_cy = E.cy
+        };
+        editorPushUndo(op);
+        removed = 1;
+    } else {
+        while (removed < TED_TAB_STOP && row->size > 0 && row->chars[0] == ' ') {
+            int before_cx = E.cx > removed ? E.cx - removed : 0;
+            int after_cx = before_cx > 0 ? before_cx - 1 : 0;
+
+            editorRowDelChar(row, 0);
+            editOp op = {
+                .type = OP_DELETE_CHAR,
+                .cy = E.cy,
+                .cx = 0,
+                .ch = ' ',
+                .indent = NULL,
+                .indent_len = 0,
+                .before_cx = before_cx,
+                .before_cy = E.cy,
+                .after_cx = after_cx,
+                .after_cy = E.cy
+            };
+            editorPushUndo(op);
+            removed++;
+        }
+    }
+
+    if (removed > 0) {
+        E.cx -= removed;
+        if (E.cx < 0) E.cx = 0;
+    }
+}
+
 /*** file i/o ***/
 
 char *editorRowsToString(int *buflen) {
@@ -1691,6 +1752,14 @@ void editorProcessKeypress(void) {
 
         case CTRL_KEY('l'):
         case '\x1b':
+            break;
+
+        case '\t':
+            editorIndent();
+            break;
+
+        case SHIFT_TAB:
+            editorOutdent();
             break;
 
         default:
