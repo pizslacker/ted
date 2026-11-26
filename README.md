@@ -19,7 +19,7 @@ TinyEDitor  v0.8.1
 
 - **XTerm SGR Mouse Support**:<br/>Click anywhere in the text viewport to position the cursor (with full tab-stop and gutter awareness) and scroll smoothly using the mouse wheel.
 
-- **C/C++ Syntax Highlighting**:<br/>Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (`//`) or multi-line (`/* ... */`) comments for `.c`, `.h`, and `.cpp` files.
+- **Multi-Language Syntax Highlighting & Shebang Detection**:<br/>Highlights keywords, directives, built-in types, strings, character literals, numbers (decimal, float, hex), and single-line or multi-line comments across C/C++, Python, Shell/Bash, Makefile, Rust, Go, and Zig—plus automatic `#!` shebang detection for extensionless scripts.
 
 - **Matching Bracket Highlighting**:<br/>Automatically highlights matching `( )`, `[ ]`, and `{ }` delimiters under the cursor while ignoring brackets inside strings and comments.
 
