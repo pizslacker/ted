@@ -196,6 +196,7 @@ int editorRowCxToRx(erow *row, int cx);
 /*** terminal ***/
 
 void die(const char *s) {
+    tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios);
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
 
