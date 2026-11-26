@@ -17,6 +17,8 @@ TinyEDitor  v0.8.2
 
 - **Runtime Configuration (`~/.tedrc` & `Ctrl-R`)**:<br/>Customize tab width, auto-indentation, line numbers, quit confirmations, and ANSI syntax colors via `~/.tedrc` or `$XDG_CONFIG_HOME/ted/tedrc`, and reload changes live with `Ctrl-R`.
 
+- **Visual Selection & Range Clipboard (`Shift+Arrow`, Mouse Drag, `Ctrl-C/X/V`)**:<br/>Select arbitrary character or multi-line spans using `Shift+Arrow keys` or left-button mouse drag, copy (`Ctrl-C`), cut (`Ctrl-X`), and paste (`Ctrl-V`) with full atomic undo/redo support.
+
 - **XTerm SGR Mouse Support**:<br/>Click anywhere in the text viewport to position the cursor (with full tab-stop and gutter awareness) and scroll smoothly using the mouse wheel.
 
 - **Multi-Language Syntax Highlighting & Shebang Detection**:<br/>Highlights keywords, directives, built-in types, strings, character literals, numbers (decimal, float, hex), and single-line or multi-line comments across C/C++, Python, Shell/Bash, Makefile, Rust, Go, and Zig—plus automatic `#!` shebang detection for extensionless scripts.

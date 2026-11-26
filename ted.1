@@ -1,4 +1,4 @@
-.TH TED 1 "November 2026" "ted 0.8.2" "User Commands"
+.TH TED 1 "November 2026" "ted 0.8.5" "User Commands"
 .SH NAME
 ted \- minimal zero-dependency terminal text editor
 .SH SYNOPSIS
@@ -17,7 +17,9 @@ opens it for editing (or initializes a new named buffer if
 .I FILE
 does not exist yet); otherwise, it starts with an empty buffer and displays a centered ASCII splash banner until text is entered.
 .PP
-Features include C/C++ syntax highlighting, matching bracket and parenthesis highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, soft-tab indentation and outdentation, line duplication and cut/paste, XTerm SGR mouse support, a dynamic line-number gutter, runtime configuration via
+Features include multi-language syntax highlighting (C/C++, Python, Shell/Bash, Makefile, Rust, Go, and Zig) with automatic
+.B #!
+shebang detection, matching bracket and parenthesis highlighting, incremental search, visual text selection with range clipboard operations, an atomic undo/redo command stack, smart auto-indentation after opening braces, single-line and multi-line block indentation/outdentation, line duplication and cut/paste, XTerm SGR mouse click/drag/wheel support, a dynamic line-number gutter, runtime configuration via
 .IR ~/.tedrc ,
 and live terminal window resizing via
 .BR SIGWINCH .
@@ -57,7 +59,7 @@ Quit
 If the buffer contains unsaved changes, pressing
 .B Ctrl-Q
 the configured number of times (default: 2 additional presses) is required to discard modifications and exit.
-.SS Search & Navigation
+.SS Search, Navigation & Selection
 .TP
 .B Ctrl-F
 Enter incremental search mode. Type a query to jump to matches in real time; use
@@ -74,7 +76,13 @@ to cancel and restore the original cursor and scroll position.
 Prompt for a 1-based line number and jump directly to that line, centering it vertically in the viewport.
 .TP
 .B Arrow Keys
-Move the cursor one character or line at a time, wrapping across line boundaries at the start and end of lines.
+Move the cursor one character or line at a time, wrapping across line boundaries at the start and end of lines. Clears any active visual selection.
+.TP
+.B Shift+Arrow Keys
+Start or extend a visual selection character-by-character or line-by-line, highlighting the selected range in reverse video.
+.TP
+.B Esc
+Clear the current visual selection.
 .TP
 .B Ctrl-Left / Ctrl-Right
 Jump backward or forward by one word.
@@ -85,18 +93,28 @@ Move the cursor to the beginning or end of the current line.
 .B Page Up / Page Down
 Scroll the viewport up or down by one full screen height.
 .TP
-.B Mouse Left-Click & Scroll Wheel
-Click anywhere inside the editor viewport to position the cursor (accounting for the line-number gutter, horizontal scroll offset, and tab stops), or use the scroll wheel to scroll vertically by 3 lines per tick via XTerm SGR mouse reporting.
-.SS Editing, Indentation & History
+.B Mouse Left-Click, Drag & Scroll Wheel
+Click anywhere inside the editor viewport to position the cursor and set a selection anchor, drag with the left mouse button held to highlight a visual selection across rows and columns, or use the scroll wheel to scroll vertically by 3 lines per tick via XTerm SGR mouse reporting.
+.SS Editing, Clipboard, Indentation & History
 .TP
 .B Ctrl-Z
-Undo the last character insertion, deletion, word deletion, line split, line join, line duplication, or line cut/paste.
+Undo the last character insertion, deletion, word deletion, line split, line join, line duplication, line cut/paste, block indent/outdent, or range cut/paste.
 .TP
 .B Ctrl-Y
 Redo the most recently undone edit.
 .TP
+.B Ctrl-C
+Copy the active visual selection into the internal clipboard.
+.TP
+.B Ctrl-X
+Cut the active visual selection into the internal clipboard and delete the selected range from the buffer.
+.TP
+.B Ctrl-V
+Paste the internal clipboard contents at the cursor (replacing any active visual selection, or inserting below the current line if the clipboard holds a full line cut via
+.BR Ctrl-K ).
+.TP
 .B Enter
-Insert a newline. When
+Insert a newline (replacing any active visual selection first). When
 .B auto_indent
 is enabled, preserves the current line's leading indentation and adds an extra
 .B tab_stop
@@ -104,14 +122,16 @@ indent level if the line ends with
 .BR { .
 .TP
 .B Tab
-Insert spaces up to the next
+When a multi-line visual selection is active, indent every line in the selected block by
+.B tab_stop
+spaces; otherwise, insert spaces up to the next
 .B tab_stop
 column boundary.
 .TP
 .B Shift-Tab
-Outdent the current line by removing up to
+When a multi-line visual selection is active, outdent every line in the selected block by up to
 .B tab_stop
-leading spaces (or one leading tab character).
+leading spaces (or one leading tab); otherwise, outdent the current line.
 .TP
 .B Ctrl-D
 Duplicate the current line directly below the cursor.
@@ -120,16 +140,16 @@ Duplicate the current line directly below the cursor.
 Cut the current line into the internal clipboard and remove it from the buffer.
 .TP
 .B Ctrl-U
-Paste the cut line from the internal clipboard directly below the current line.
+Paste a cut line from the internal clipboard directly below the current line.
 .TP
 .B Backspace
-Delete the character before the cursor, or merge the current line onto the end of the previous line when at column 1.
+Delete the active visual selection if one exists; otherwise, delete the character before the cursor or merge the current line onto the end of the previous line when at column 1.
 .TP
 .B Ctrl-Backspace / Ctrl-H
-Delete the previous word (or delimiter run) before the cursor.
+Delete the active visual selection if one exists; otherwise, delete the previous word (or delimiter run) before the cursor.
 .TP
 .B Delete
-Delete the character under the cursor.
+Delete the active visual selection if one exists; otherwise, delete the character under the cursor.
 .SH CONFIGURATION
 At startup (and when pressing
 .BR Ctrl-R ),
@@ -185,10 +205,10 @@ confirmations required when quitting with unsaved changes (integer,
 Syntax color for single-line and multi-line comments (default: cyan).
 .TP
 .BI color_keyword " = 33"
-Syntax color for control-flow keywords and preprocessor directives (default: yellow).
+Syntax color for control-flow keywords and preprocessor/compiler directives (default: yellow).
 .TP
 .BI color_type " = 32"
-Syntax color for C/C++ types (default: green).
+Syntax color for built-in types, constants, and special variables (default: green).
 .TP
 .BI color_string " = 35"
 Syntax color for string and character literals (default: magenta).
@@ -205,11 +225,43 @@ Color for line numbers and
 empty-row markers (default: gray).
 .SH SYNTAX & BRACKET HIGHLIGHTING
 .B ted
-automatically enables C-family syntax highlighting (keywords, preprocessor directives, primitive types, strings, character literals, numbers, and single-line or multi-line comments) when editing files ending in
-.BR .c ,
-.BR .h ,
+automatically detects the language from the file's basename or extension:
+.TP
+.B C / C++
+.BR .c ", " .h ", " .cpp ", " .hpp ", " .cc
+.TP
+.B Python
+.BR .py ", " .pyw
+(including multi-line
+.B """
+docstrings)
+.TP
+.B Shell / Bash
+.BR .sh ", " .bash ", " .zsh
+.TP
+.B Makefile
+.BR Makefile ", " makefile ", " GNUmakefile ", " .mk
+.TP
+.B Rust
+.B .rs
+.TP
+.B Go
+.B .go
+.TP
+.B Zig
+.B .zig
+.PP
+For extensionless files,
+.B ted
+also inspects the first line for a
+.B #!
+shebang (such as
+.BR "#!/usr/bin/env python3" ,
+.BR "#!/bin/bash" ,
+.BR "#!/bin/zsh" ,
 or
-.BR .cpp .
+.BR "#!/bin/sh" )
+and applies the corresponding Python or Shell syntax rules automatically.
 .PP
 Whenever the cursor rests on a delimiter
 .RB ( ( ", " ) ", " [ ", " ] ", " { ", or " } )

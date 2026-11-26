@@ -39,7 +39,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.8.2"
+#define TED_VERSION "0.8.5"
 #define TED_MOUSE_SCROLL_LINES 3
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -49,6 +49,10 @@ enum editorKey {
     ARROW_RIGHT,
     ARROW_UP,
     ARROW_DOWN,
+    SHIFT_ARROW_LEFT,
+    SHIFT_ARROW_RIGHT,
+    SHIFT_ARROW_UP,
+    SHIFT_ARROW_DOWN,
     CTRL_ARROW_LEFT,
     CTRL_ARROW_RIGHT,
     CTRL_BACKSPACE,
@@ -94,16 +98,23 @@ enum editOpType {
     OP_SPLIT_LINE,
     OP_JOIN_LINE,
     OP_INSERT_LINE,
-    OP_DELETE_LINE
+    OP_DELETE_LINE,
+    OP_REPLACE_RANGE
 };
 
 typedef struct editOp {
     enum editOpType type;
-    int cy;             // Target row index
-    int cx;             // Target column index
+    int cy;             // Start row index
+    int cx;             // Start column index
     int ch;             // Character for INSERT_CHAR / DELETE_CHAR
-    char *indent;       // Line payload or auto-indent prefix
-    int indent_len;     // Length of indent/line payload
+    char *indent;       // Line payload, auto-indent prefix, or inserted range text
+    int indent_len;     // Length of indent/inserted range text
+    char *old_text;     // Removed range text for OP_REPLACE_RANGE
+    int old_len;        // Length of old_text
+    int del_ey;         // End row index of deleted old_text
+    int del_ex;         // End column index of deleted old_text
+    int end_cy;         // End row index of inserted indent text
+    int end_cx;         // End column index of inserted indent text
     int before_cx;      // Cursor X before edit
     int before_cy;      // Cursor Y before edit
     int after_cx;       // Cursor X after edit
@@ -136,7 +147,8 @@ struct editorConfig {
     int undo_len;                   // Total valid entries (undo_top .. undo_len = redoable)
     int undo_cap;                   // Allocated capacity of undo_stack
     int in_undo_redo;               // Re-entrancy guard during replay
-    char *clipboard;                // Internal line cut/paste buffer
+    char *clipboard;                // Internal line or range clipboard buffer
+    int clipboard_is_line;          // 1 if copied via Ctrl-K, 0 if range via Ctrl-C/X
     char *filename;
     char *config_path;              // Optional explicit config file path (-c/--config)
     char statusmsg[256];
@@ -145,11 +157,16 @@ struct editorConfig {
     struct termios orig_termios;
     volatile sig_atomic_t resized;
 
+    // Visual selection state
+    int sel_active;                 // 1 when selection anchor is active
+    int sel_start_cx;               // Selection anchor column
+    int sel_start_cy;               // Selection anchor row
+
     // XTerm SGR mouse event state
-    int mouse_btn;                  // SGR button bitmask (0=left, 64=wheel up, 65=wheel down)
+    int mouse_btn;                  // SGR button bitmask (0=left, 32=drag, 64=wheel up, 65=wheel down)
     int mouse_x;                    // 1-based terminal column
     int mouse_y;                    // 1-based terminal row
-    int mouse_release;              // 1 if 'm' (button release), 0 if 'M' (press/wheel)
+    int mouse_release;              // 1 if 'm' (button release), 0 if 'M' (press/drag/wheel)
 
     // Runtime configuration options (~/.tedrc)
     int tab_stop;                   // Default: 4 (clamped 1..16)
@@ -324,11 +341,13 @@ void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen(void);
 char *editorPrompt(char *prompt, void (*callback)(char *, int));
 int editorRowCxToRx(erow *row, int cx);
+int editorRowRxToCx(erow *row, int rx);
+void editorPushUndo(editOp op);
 
 /*** terminal ***/
 
 void die(const char *s) {
-    write(STDOUT_FILENO, "\x1b[?1006l\x1b[?1000l", 16);
+    write(STDOUT_FILENO, "\x1b[?1006l\x1b[?1002l\x1b[?1000l", 24);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios);
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
@@ -338,7 +357,7 @@ void die(const char *s) {
 }
 
 void disableRawMode(void) {
-    write(STDOUT_FILENO, "\x1b[?1006l\x1b[?1000l", 16);
+    write(STDOUT_FILENO, "\x1b[?1006l\x1b[?1002l\x1b[?1000l", 24);
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1) {
         die("tcsetattr");
     }
@@ -362,8 +381,8 @@ void enableRawMode(void) {
         die("tcsetattr");
     }
 
-    // Enable X11 button/wheel events (1000) + SGR decimal coordinates (1006)
-    write(STDOUT_FILENO, "\x1b[?1000h\x1b[?1006h", 16);
+    // Enable button press (1000), button drag motion (1002), and SGR coordinates (1006)
+    write(STDOUT_FILENO, "\x1b[?1000h\x1b[?1002h\x1b[?1006h", 24);
 }
 
 int editorReadKey(void) {
@@ -425,10 +444,17 @@ int editorReadKey(void) {
                         case '8': return END_KEY;
                     }
                 } else if (seq[1] == '1' && seq[2] == ';') {
-                    // CSI 1;<mod><dir> (modifier 5 = Ctrl)
+                    // CSI 1;<mod><dir> (modifier 2 = Shift, 5 = Ctrl)
                     if (read(STDIN_FILENO, &seq[3], 1) != 1) return '\x1b';
                     if (read(STDIN_FILENO, &seq[4], 1) != 1) return '\x1b';
-                    if (seq[3] == '5') {
+                    if (seq[3] == '2') {
+                        switch (seq[4]) {
+                            case 'A': return SHIFT_ARROW_UP;
+                            case 'B': return SHIFT_ARROW_DOWN;
+                            case 'C': return SHIFT_ARROW_RIGHT;
+                            case 'D': return SHIFT_ARROW_LEFT;
+                        }
+                    } else if (seq[3] == '5') {
                         switch (seq[4]) {
                             case 'C': return CTRL_ARROW_RIGHT;
                             case 'D': return CTRL_ARROW_LEFT;
@@ -892,11 +918,194 @@ void editorRowDelChar(erow *row, int at) {
     E.dirty++;
 }
 
+/*** selection & range helpers ***/
+
+void editorClearSelection(void) {
+    E.sel_active = 0;
+}
+
+int editorGetSelectionBounds(int *sy, int *sx, int *ey, int *ex) {
+    if (!E.sel_active || E.numrows == 0) return 0;
+
+    int a_cy = E.sel_start_cy;
+    int a_cx = E.sel_start_cx;
+    int b_cy = E.cy;
+    int b_cx = E.cx;
+
+    if (a_cy >= E.numrows) {
+        a_cy = E.numrows - 1;
+        a_cx = E.row[a_cy].size;
+    }
+    if (b_cy >= E.numrows) {
+        b_cy = E.numrows - 1;
+        b_cx = E.row[b_cy].size;
+    }
+
+    if (a_cy == b_cy && a_cx == b_cx) return 0;
+
+    if (a_cy < b_cy || (a_cy == b_cy && a_cx <= b_cx)) {
+        *sy = a_cy;
+        *sx = a_cx;
+        *ey = b_cy;
+        *ex = b_cx;
+    } else {
+        *sy = b_cy;
+        *sx = b_cx;
+        *ey = a_cy;
+        *ex = a_cx;
+    }
+    return 1;
+}
+
+char *editorExtractRange(int sy, int sx, int ey, int ex, int *out_len) {
+    if (sy == ey) {
+        int len = ex - sx;
+        char *buf = malloc(len + 1);
+        memcpy(buf, &E.row[sy].chars[sx], len);
+        buf[len] = '\0';
+        *out_len = len;
+        return buf;
+    }
+
+    int total = (E.row[sy].size - sx) + 1;
+    for (int r = sy + 1; r < ey; r++) {
+        total += E.row[r].size + 1;
+    }
+    total += ex;
+
+    char *buf = malloc(total + 1);
+    char *p = buf;
+
+    int first_len = E.row[sy].size - sx;
+    memcpy(p, &E.row[sy].chars[sx], first_len);
+    p += first_len;
+    *p++ = '\n';
+
+    for (int r = sy + 1; r < ey; r++) {
+        memcpy(p, E.row[r].chars, E.row[r].size);
+        p += E.row[r].size;
+        *p++ = '\n';
+    }
+
+    memcpy(p, E.row[ey].chars, ex);
+    p += ex;
+    *p = '\0';
+
+    *out_len = total;
+    return buf;
+}
+
+void editorDeleteRangeRaw(int sy, int sx, int ey, int ex) {
+    if (sy >= E.numrows) return;
+    if (sy == ey) {
+        erow *row = &E.row[sy];
+        int count = ex - sx;
+        if (count > 0) {
+            memmove(&row->chars[sx], &row->chars[ex], row->size - ex + 1);
+            row->size -= count;
+            editorUpdateRow(row);
+            E.dirty++;
+        }
+        return;
+    }
+
+    erow *first = &E.row[sy];
+    first->size = sx;
+    first->chars[sx] = '\0';
+
+    erow *last = &E.row[ey];
+    editorRowAppendString(first, &last->chars[ex], last->size - ex);
+
+    for (int r = ey; r > sy; r--) {
+        editorDelRow(r);
+    }
+}
+
+void editorInsertRangeRaw(int sy, int sx, const char *text, int len,
+                          int *out_ey, int *out_ex) {
+    if (E.numrows == 0) {
+        editorInsertRow(0, "", 0);
+    }
+
+    int cur_y = sy;
+    int cur_x = sx;
+    int seg_start = 0;
+
+    for (int i = 0; i <= len; i++) {
+        if (i == len || text[i] == '\n') {
+            int seg_len = i - seg_start;
+            erow *row = &E.row[cur_y];
+            row->chars = realloc(row->chars, row->size + seg_len + 1);
+            memmove(&row->chars[cur_x + seg_len], &row->chars[cur_x],
+                    row->size - cur_x + 1);
+            memcpy(&row->chars[cur_x], &text[seg_start], seg_len);
+            row->size += seg_len;
+            editorUpdateRow(row);
+            E.dirty++;
+            cur_x += seg_len;
+
+            if (i < len && text[i] == '\n') {
+                row = &E.row[cur_y];
+                int tail_len = row->size - cur_x;
+                editorInsertRow(cur_y + 1, &row->chars[cur_x], tail_len);
+                row = &E.row[cur_y];
+                row->size = cur_x;
+                row->chars[cur_x] = '\0';
+                editorUpdateRow(row);
+                cur_y++;
+                cur_x = 0;
+                seg_start = i + 1;
+            }
+        }
+    }
+
+    *out_ey = cur_y;
+    *out_ex = cur_x;
+}
+
+int editorDeleteActiveSelection(void) {
+    int sy, sx, ey, ex;
+    if (!editorGetSelectionBounds(&sy, &sx, &ey, &ex)) return 0;
+
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+    int len = 0;
+    char *old_text = editorExtractRange(sy, sx, ey, ex, &len);
+
+    editorDeleteRangeRaw(sy, sx, ey, ex);
+    editorClearSelection();
+    E.cy = sy;
+    E.cx = sx;
+
+    editOp op = {
+        .type = OP_REPLACE_RANGE,
+        .cy = sy,
+        .cx = sx,
+        .ch = 0,
+        .indent = NULL,
+        .indent_len = 0,
+        .old_text = old_text,
+        .old_len = len,
+        .del_ey = ey,
+        .del_ex = ex,
+        .end_cy = sy,
+        .end_cx = sx,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
+    return 1;
+}
+
 /*** undo / redo ***/
 
 void editorFreeEditOp(editOp *op) {
     free(op->indent);
     op->indent = NULL;
+    free(op->old_text);
+    op->old_text = NULL;
 }
 
 void editorClearUndoHistory(void) {
@@ -940,6 +1149,7 @@ void editorUndo(void) {
         return;
     }
 
+    editorClearSelection();
     E.in_undo_redo = 1;
     editOp *op = &E.undo_stack[--E.undo_top];
 
@@ -978,6 +1188,17 @@ void editorUndo(void) {
         case OP_DELETE_LINE:
             editorInsertRow(op->cy, op->indent ? op->indent : "", op->indent_len);
             break;
+
+        case OP_REPLACE_RANGE:
+            if (op->indent_len > 0) {
+                editorDeleteRangeRaw(op->cy, op->cx, op->end_cy, op->end_cx);
+            }
+            if (op->old_len > 0) {
+                int dummy_y, dummy_x;
+                editorInsertRangeRaw(op->cy, op->cx, op->old_text, op->old_len,
+                                     &dummy_y, &dummy_x);
+            }
+            break;
     }
 
     E.cx = op->before_cx;
@@ -994,6 +1215,7 @@ void editorRedo(void) {
         return;
     }
 
+    editorClearSelection();
     E.in_undo_redo = 1;
     editOp *op = &E.undo_stack[E.undo_top++];
 
@@ -1049,6 +1271,17 @@ void editorRedo(void) {
         case OP_DELETE_LINE:
             editorDelRow(op->cy);
             break;
+
+        case OP_REPLACE_RANGE:
+            if (op->old_len > 0) {
+                editorDeleteRangeRaw(op->cy, op->cx, op->del_ey, op->del_ex);
+            }
+            if (op->indent_len > 0) {
+                int dummy_y, dummy_x;
+                editorInsertRangeRaw(op->cy, op->cx, op->indent, op->indent_len,
+                                     &dummy_y, &dummy_x);
+            }
+            break;
     }
 
     E.cx = op->after_cx;
@@ -1062,6 +1295,8 @@ void editorRedo(void) {
 /*** editor operations ***/
 
 void editorInsertChar(int c) {
+    editorDeleteActiveSelection();
+
     int before_cx = E.cx;
     int before_cy = E.cy;
 
@@ -1078,6 +1313,12 @@ void editorInsertChar(int c) {
         .ch = c,
         .indent = NULL,
         .indent_len = 0,
+        .old_text = NULL,
+        .old_len = 0,
+        .del_ey = 0,
+        .del_ex = 0,
+        .end_cy = 0,
+        .end_cx = 0,
         .before_cx = before_cx,
         .before_cy = before_cy,
         .after_cx = E.cx,
@@ -1087,6 +1328,8 @@ void editorInsertChar(int c) {
 }
 
 void editorInsertNewline(void) {
+    editorDeleteActiveSelection();
+
     int before_cx = E.cx;
     int before_cy = E.cy;
 
@@ -1102,6 +1345,12 @@ void editorInsertNewline(void) {
             .ch = 0,
             .indent = NULL,
             .indent_len = 0,
+            .old_text = NULL,
+            .old_len = 0,
+            .del_ey = 0,
+            .del_ex = 0,
+            .end_cy = 0,
+            .end_cx = 0,
             .before_cx = before_cx,
             .before_cy = before_cy,
             .after_cx = E.cx,
@@ -1166,6 +1415,12 @@ void editorInsertNewline(void) {
         .ch = 0,
         .indent = saved_indent,
         .indent_len = total_indent,
+        .old_text = NULL,
+        .old_len = 0,
+        .del_ey = 0,
+        .del_ex = 0,
+        .end_cy = 0,
+        .end_cx = 0,
         .before_cx = before_cx,
         .before_cy = before_cy,
         .after_cx = E.cx,
@@ -1175,6 +1430,7 @@ void editorInsertNewline(void) {
 }
 
 void editorDelChar(void) {
+    if (editorDeleteActiveSelection()) return;
     if (E.cy == E.numrows) return;
     if (E.cx == 0 && E.cy == 0) return;
 
@@ -1194,6 +1450,12 @@ void editorDelChar(void) {
             .ch = deleted_ch,
             .indent = NULL,
             .indent_len = 0,
+            .old_text = NULL,
+            .old_len = 0,
+            .del_ey = 0,
+            .del_ex = 0,
+            .end_cy = 0,
+            .end_cx = 0,
             .before_cx = before_cx,
             .before_cy = before_cy,
             .after_cx = E.cx,
@@ -1214,6 +1476,12 @@ void editorDelChar(void) {
             .ch = 0,
             .indent = NULL,
             .indent_len = 0,
+            .old_text = NULL,
+            .old_len = 0,
+            .del_ey = 0,
+            .del_ex = 0,
+            .end_cy = 0,
+            .end_cx = 0,
             .before_cx = before_cx,
             .before_cy = before_cy,
             .after_cx = E.cx,
@@ -1224,6 +1492,7 @@ void editorDelChar(void) {
 }
 
 void editorMoveWord(int key) {
+    editorClearSelection();
     if (key == CTRL_ARROW_LEFT) {
         if (E.cx == 0) {
             if (E.cy > 0) {
@@ -1259,6 +1528,7 @@ void editorMoveWord(int key) {
 }
 
 void editorDelWord(void) {
+    if (editorDeleteActiveSelection()) return;
     if (E.cy == E.numrows) return;
     if (E.cx == 0 && E.cy == 0) return;
 
@@ -1284,6 +1554,55 @@ void editorDelWord(void) {
 }
 
 void editorIndent(void) {
+    int sy, sx, ey, ex;
+    if (editorGetSelectionBounds(&sy, &sx, &ey, &ex) && sy != ey) {
+        int end_row = (ex == 0 && ey > sy) ? ey - 1 : ey;
+        int before_cx = E.cx;
+        int before_cy = E.cy;
+        int end_col = E.row[end_row].size;
+
+        int old_len = 0;
+        char *old_text = editorExtractRange(sy, 0, end_row, end_col, &old_len);
+
+        char spaces[17];
+        memset(spaces, ' ', E.tab_stop);
+        spaces[E.tab_stop] = '\0';
+
+        for (int r = sy; r <= end_row; r++) {
+            int dummy_y, dummy_x;
+            editorInsertRangeRaw(r, 0, spaces, E.tab_stop, &dummy_y, &dummy_x);
+        }
+
+        if (E.sel_start_cy <= end_row) E.sel_start_cx += E.tab_stop;
+        if (E.cy <= end_row) E.cx += E.tab_stop;
+
+        int new_end_col = E.row[end_row].size;
+        int new_len = 0;
+        char *new_text = editorExtractRange(sy, 0, end_row, new_end_col, &new_len);
+
+        editOp op = {
+            .type = OP_REPLACE_RANGE,
+            .cy = sy,
+            .cx = 0,
+            .ch = 0,
+            .indent = new_text,
+            .indent_len = new_len,
+            .old_text = old_text,
+            .old_len = old_len,
+            .del_ey = end_row,
+            .del_ex = end_col,
+            .end_cy = end_row,
+            .end_cx = new_end_col,
+            .before_cx = before_cx,
+            .before_cy = before_cy,
+            .after_cx = E.cx,
+            .after_cy = E.cy
+        };
+        editorPushUndo(op);
+        return;
+    }
+
+    editorClearSelection();
     int spaces = E.tab_stop - (E.cx % E.tab_stop);
     for (int i = 0; i < spaces; i++) {
         editorInsertChar(' ');
@@ -1291,6 +1610,72 @@ void editorIndent(void) {
 }
 
 void editorOutdent(void) {
+    int sy, sx, ey, ex;
+    if (editorGetSelectionBounds(&sy, &sx, &ey, &ex) && sy != ey) {
+        int end_row = (ex == 0 && ey > sy) ? ey - 1 : ey;
+        int before_cx = E.cx;
+        int before_cy = E.cy;
+        int end_col = E.row[end_row].size;
+
+        int old_len = 0;
+        char *old_text = editorExtractRange(sy, 0, end_row, end_col, &old_len);
+
+        int any_removed = 0;
+        for (int r = sy; r <= end_row; r++) {
+            erow *row = &E.row[r];
+            int removed = 0;
+            if (row->size > 0 && row->chars[0] == '\t') {
+                editorRowDelChar(row, 0);
+                removed = 1;
+            } else {
+                while (removed < E.tab_stop && row->size > 0 && row->chars[0] == ' ') {
+                    editorRowDelChar(row, 0);
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                any_removed = 1;
+                if (E.sel_start_cy == r) {
+                    E.sel_start_cx = (E.sel_start_cx > removed) ? (E.sel_start_cx - removed) : 0;
+                }
+                if (E.cy == r) {
+                    E.cx = (E.cx > removed) ? (E.cx - removed) : 0;
+                }
+            }
+        }
+
+        if (!any_removed) {
+            free(old_text);
+            return;
+        }
+
+        int new_end_col = E.row[end_row].size;
+        int new_len = 0;
+        char *new_text = editorExtractRange(sy, 0, end_row, new_end_col, &new_len);
+
+        editOp op = {
+            .type = OP_REPLACE_RANGE,
+            .cy = sy,
+            .cx = 0,
+            .ch = 0,
+            .indent = new_text,
+            .indent_len = new_len,
+            .old_text = old_text,
+            .old_len = old_len,
+            .del_ey = end_row,
+            .del_ex = end_col,
+            .end_cy = end_row,
+            .end_cx = new_end_col,
+            .before_cx = before_cx,
+            .before_cy = before_cy,
+            .after_cx = E.cx,
+            .after_cy = E.cy
+        };
+        editorPushUndo(op);
+        return;
+    }
+
+    editorClearSelection();
     if (E.cy >= E.numrows) return;
     erow *row = &E.row[E.cy];
     if (row->size == 0) return;
@@ -1305,6 +1690,12 @@ void editorOutdent(void) {
             .ch = '\t',
             .indent = NULL,
             .indent_len = 0,
+            .old_text = NULL,
+            .old_len = 0,
+            .del_ey = 0,
+            .del_ex = 0,
+            .end_cy = 0,
+            .end_cx = 0,
             .before_cx = E.cx,
             .before_cy = E.cy,
             .after_cx = E.cx > 0 ? E.cx - 1 : 0,
@@ -1325,6 +1716,12 @@ void editorOutdent(void) {
                 .ch = ' ',
                 .indent = NULL,
                 .indent_len = 0,
+                .old_text = NULL,
+                .old_len = 0,
+                .del_ey = 0,
+                .del_ex = 0,
+                .end_cy = 0,
+                .end_cx = 0,
                 .before_cx = before_cx,
                 .before_cy = E.cy,
                 .after_cx = after_cx,
@@ -1342,6 +1739,7 @@ void editorOutdent(void) {
 }
 
 void editorDuplicateLine(void) {
+    editorClearSelection();
     if (E.cy >= E.numrows) return;
 
     int before_cx = E.cx;
@@ -1366,6 +1764,12 @@ void editorDuplicateLine(void) {
         .ch = 0,
         .indent = copy,
         .indent_len = len,
+        .old_text = NULL,
+        .old_len = 0,
+        .del_ey = 0,
+        .del_ex = 0,
+        .end_cy = 0,
+        .end_cx = 0,
         .before_cx = before_cx,
         .before_cy = before_cy,
         .after_cx = E.cx,
@@ -1376,6 +1780,7 @@ void editorDuplicateLine(void) {
 }
 
 void editorCutLine(void) {
+    editorClearSelection();
     if (E.cy >= E.numrows) return;
 
     int before_cx = E.cx;
@@ -1390,6 +1795,7 @@ void editorCutLine(void) {
     free(E.clipboard);
     E.clipboard = malloc(len + 1);
     memcpy(E.clipboard, saved, len + 1);
+    E.clipboard_is_line = 1;
 
     editorDelRow(E.cy);
     if (E.cy >= E.numrows && E.numrows > 0) {
@@ -1409,16 +1815,23 @@ void editorCutLine(void) {
         .ch = 0,
         .indent = saved,
         .indent_len = len,
+        .old_text = NULL,
+        .old_len = 0,
+        .del_ey = 0,
+        .del_ex = 0,
+        .end_cy = 0,
+        .end_cx = 0,
         .before_cx = before_cx,
         .before_cy = before_cy,
         .after_cx = E.cx,
         .after_cy = E.cy
     };
     editorPushUndo(op);
-    editorSetStatusMessage("Line cut (Ctrl-U to paste)");
+    editorSetStatusMessage("Line cut (Ctrl-U / Ctrl-V to paste)");
 }
 
 void editorPasteLine(void) {
+    editorClearSelection();
     if (E.clipboard == NULL) {
         editorSetStatusMessage("Clipboard is empty");
         return;
@@ -1445,6 +1858,12 @@ void editorPasteLine(void) {
         .ch = 0,
         .indent = copy,
         .indent_len = len,
+        .old_text = NULL,
+        .old_len = 0,
+        .del_ey = 0,
+        .del_ex = 0,
+        .end_cy = 0,
+        .end_cx = 0,
         .before_cx = before_cx,
         .before_cy = before_cy,
         .after_cx = E.cx,
@@ -1452,6 +1871,123 @@ void editorPasteLine(void) {
     };
     editorPushUndo(op);
     editorSetStatusMessage("Line pasted");
+}
+
+void editorCopySelection(void) {
+    int sy, sx, ey, ex;
+    if (!editorGetSelectionBounds(&sy, &sx, &ey, &ex)) {
+        editorSetStatusMessage("No text selected");
+        return;
+    }
+
+    int len = 0;
+    char *text = editorExtractRange(sy, sx, ey, ex, &len);
+    free(E.clipboard);
+    E.clipboard = text;
+    E.clipboard_is_line = 0;
+    editorSetStatusMessage("Copied %d byte(s)", len);
+}
+
+void editorCutSelection(void) {
+    int sy, sx, ey, ex;
+    if (!editorGetSelectionBounds(&sy, &sx, &ey, &ex)) {
+        editorSetStatusMessage("No text selected");
+        return;
+    }
+
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+    int len = 0;
+    char *text = editorExtractRange(sy, sx, ey, ex, &len);
+
+    free(E.clipboard);
+    E.clipboard = malloc(len + 1);
+    memcpy(E.clipboard, text, len + 1);
+    E.clipboard_is_line = 0;
+
+    editorDeleteRangeRaw(sy, sx, ey, ex);
+    editorClearSelection();
+    E.cy = sy;
+    E.cx = sx;
+
+    editOp op = {
+        .type = OP_REPLACE_RANGE,
+        .cy = sy,
+        .cx = sx,
+        .ch = 0,
+        .indent = NULL,
+        .indent_len = 0,
+        .old_text = text,
+        .old_len = len,
+        .del_ey = ey,
+        .del_ex = ex,
+        .end_cy = sy,
+        .end_cx = sx,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
+    editorSetStatusMessage("Cut %d byte(s)", len);
+}
+
+void editorPasteClipboard(void) {
+    if (E.clipboard == NULL) {
+        editorSetStatusMessage("Clipboard is empty");
+        return;
+    }
+
+    if (E.clipboard_is_line) {
+        editorPasteLine();
+        return;
+    }
+
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+    int sy = E.cy;
+    int sx = E.cx;
+    char *old_text = NULL;
+    int old_len = 0;
+    int del_ey = sy;
+    int del_ex = sx;
+
+    if (editorGetSelectionBounds(&sy, &sx, &del_ey, &del_ex)) {
+        old_text = editorExtractRange(sy, sx, del_ey, del_ex, &old_len);
+        editorDeleteRangeRaw(sy, sx, del_ey, del_ex);
+        editorClearSelection();
+    }
+
+    int ins_len = (int)strlen(E.clipboard);
+    char *ins_copy = malloc(ins_len + 1);
+    memcpy(ins_copy, E.clipboard, ins_len + 1);
+
+    int new_ey = sy;
+    int new_ex = sx;
+    editorInsertRangeRaw(sy, sx, ins_copy, ins_len, &new_ey, &new_ex);
+    E.cy = new_ey;
+    E.cx = new_ex;
+
+    editOp op = {
+        .type = OP_REPLACE_RANGE,
+        .cy = sy,
+        .cx = sx,
+        .ch = 0,
+        .indent = ins_copy,
+        .indent_len = ins_len,
+        .old_text = old_text,
+        .old_len = old_len,
+        .del_ey = del_ey,
+        .del_ex = del_ex,
+        .end_cy = new_ey,
+        .end_cx = new_ex,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
+    editorSetStatusMessage("Pasted %d byte(s)", ins_len);
 }
 
 /*** file i/o ***/
@@ -1479,6 +2015,7 @@ void editorOpen(char *filename) {
     free(E.filename);
     E.filename = strdup(filename);
 
+    editorClearSelection();
     editorClearUndoHistory();
     editorSelectSyntaxHighlight();
 
@@ -1606,6 +2143,7 @@ void editorFindCallback(char *query, int key) {
 }
 
 void editorFind(void) {
+    editorClearSelection();
     int saved_cx = E.cx;
     int saved_cy = E.cy;
     int saved_coloff = E.coloff;
@@ -1630,6 +2168,7 @@ void editorGotoLine(void) {
         return;
     }
 
+    editorClearSelection();
     char prompt[64];
     snprintf(prompt, sizeof(prompt), "Go to line (1-%d): %%s (ESC to cancel)", E.numrows);
 
@@ -1736,6 +2275,9 @@ void editorDrawRows(struct abuf *ab) {
     int match_row = -1, match_rx = -1;
     int has_match = editorFindMatchingBracket(&match_row, &match_rx);
 
+    int sel_sy = 0, sel_sx = 0, sel_ey = 0, sel_ex = 0;
+    int has_sel = editorGetSelectionBounds(&sel_sy, &sel_sx, &sel_ey, &sel_ex);
+
     // Classic slant-style ASCII banner (all lines exact width: 22 chars)
     static const char *logo[] = {
         "  _            _      ",
@@ -1816,11 +2358,36 @@ void editorDrawRows(struct abuf *ab) {
 
             for (int j = 0; j < len; j++) {
                 int abs_rx = j + E.coloff;
+                int raw_cx = editorRowRxToCx(&E.row[filerow], abs_rx);
+
+                int in_sel = 0;
+                if (has_sel && filerow >= sel_sy && filerow <= sel_ey) {
+                    if (sel_sy == sel_ey) {
+                        in_sel = (raw_cx >= sel_sx && raw_cx < sel_ex);
+                    } else if (filerow == sel_sy) {
+                        in_sel = (raw_cx >= sel_sx);
+                    } else if (filerow == sel_ey) {
+                        in_sel = (raw_cx < sel_ex);
+                    } else {
+                        in_sel = 1;
+                    }
+                }
+
                 int is_bracket = has_match &&
                     ((filerow == E.cy && abs_rx == E.rx) ||
                      (filerow == match_row && abs_rx == match_rx));
 
-                if (is_bracket) {
+                if (in_sel) {
+                    abAppend(ab, "\x1b[7m", 4);
+                    char out_ch = iscntrl(c[j]) ? ((c[j] <= 26) ? '@' + c[j] : '?') : c[j];
+                    abAppend(ab, &out_ch, 1);
+                    abAppend(ab, "\x1b[27m", 5);
+                    if (current_color != -1) {
+                        char buf[16];
+                        int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", current_color);
+                        abAppend(ab, buf, clen);
+                    }
+                } else if (is_bracket) {
                     abAppend(ab, "\x1b[1;7m", 6); // Bold + reverse video
                     abAppend(ab, &c[j], 1);
                     abAppend(ab, "\x1b[22;27m", 8);
@@ -2205,6 +2772,29 @@ void editorMoveCursor(int key) {
     }
 }
 
+static void editorMapScreenToBuffer(int term_x, int term_y, int *out_cy, int *out_cx) {
+    int click_row = term_y - 1;
+    if (click_row < 0) click_row = 0;
+    if (click_row >= E.screenrows) click_row = E.screenrows - 1;
+
+    int target_cy = click_row + E.rowoff;
+    if (target_cy >= E.numrows) {
+        target_cy = E.numrows - 1;
+    }
+    if (target_cy < 0) target_cy = 0;
+
+    int gutter = editorGutterWidth();
+    int click_col = (term_x - 1) - gutter;
+    if (click_col < 0) click_col = 0;
+
+    int target_rx = click_col + E.coloff;
+    erow *row = &E.row[target_cy];
+    int target_cx = (target_rx >= row->rsize) ? row->size : editorRowRxToCx(row, target_rx);
+
+    *out_cy = target_cy;
+    *out_cx = target_cx;
+}
+
 void editorHandleMouse(void) {
     if (E.mouse_release) return; // Ignore button-release packets
 
@@ -2243,28 +2833,29 @@ void editorHandleMouse(void) {
     }
 
     if (btn == 0) {
-        // Left-click inside the text viewport (ignore status/message bars)
+        // Left-click inside text viewport sets cursor and selection anchor
         int click_row = E.mouse_y - 1;
         if (click_row < 0 || click_row >= E.screenrows) return;
         if (E.numrows == 0) return;
 
-        int target_cy = click_row + E.rowoff;
-        if (target_cy >= E.numrows) {
-            target_cy = E.numrows - 1;
-        }
+        int target_cy, target_cx;
+        editorMapScreenToBuffer(E.mouse_x, E.mouse_y, &target_cy, &target_cx);
         E.cy = target_cy;
+        E.cx = target_cx;
+        editorClearSelection();
+        E.sel_start_cy = target_cy;
+        E.sel_start_cx = target_cx;
+        return;
+    }
 
-        int gutter = editorGutterWidth();
-        int click_col = (E.mouse_x - 1) - gutter;
-        if (click_col < 0) click_col = 0;
-
-        int target_rx = click_col + E.coloff;
-        erow *row = &E.row[E.cy];
-        if (target_rx >= row->rsize) {
-            E.cx = row->size;
-        } else {
-            E.cx = editorRowRxToCx(row, target_rx);
-        }
+    if (btn == 32) {
+        // Left-button drag extends visual selection
+        if (E.numrows == 0) return;
+        int target_cy, target_cx;
+        editorMapScreenToBuffer(E.mouse_x, E.mouse_y, &target_cy, &target_cx);
+        E.cy = target_cy;
+        E.cx = target_cx;
+        E.sel_active = 1;
     }
 }
 
@@ -2304,6 +2895,7 @@ void editorProcessKeypress(void) {
                 quit_times--;
                 return;
             }
+            write(STDOUT_FILENO, "\x1b[?1006l\x1b[?1002l\x1b[?1000l", 24);
             write(STDOUT_FILENO, "\x1b[2J", 4);
             write(STDOUT_FILENO, "\x1b[H", 3);
             exit(0);
@@ -2323,6 +2915,18 @@ void editorProcessKeypress(void) {
 
         case CTRL_KEY('r'):
             editorReloadConfig();
+            break;
+
+        case CTRL_KEY('c'):
+            editorCopySelection();
+            break;
+
+        case CTRL_KEY('x'):
+            editorCutSelection();
+            break;
+
+        case CTRL_KEY('v'):
+            editorPasteClipboard();
             break;
 
         case CTRL_KEY('d'):
@@ -2346,10 +2950,12 @@ void editorProcessKeypress(void) {
             break;
 
         case HOME_KEY:
+            editorClearSelection();
             E.cx = 0;
             break;
 
         case END_KEY:
+            editorClearSelection();
             if (E.cy < E.numrows) {
                 E.cx = E.row[E.cy].size;
             }
@@ -2357,7 +2963,7 @@ void editorProcessKeypress(void) {
 
         case BACKSPACE:
         case DEL_KEY:
-            if (c == DEL_KEY) editorMoveCursor(ARROW_RIGHT);
+            if (c == DEL_KEY && !E.sel_active) editorMoveCursor(ARROW_RIGHT);
             editorDelChar();
             break;
 
@@ -2367,6 +2973,7 @@ void editorProcessKeypress(void) {
 
         case PAGE_UP:
         case PAGE_DOWN: {
+            editorClearSelection();
             if (c == PAGE_UP) {
                 E.cy = E.rowoff;
             } else if (c == PAGE_DOWN) {
@@ -2385,8 +2992,23 @@ void editorProcessKeypress(void) {
         case ARROW_DOWN:
         case ARROW_LEFT:
         case ARROW_RIGHT:
+            editorClearSelection();
             editorMoveCursor(c);
             break;
+
+        case SHIFT_ARROW_UP:
+        case SHIFT_ARROW_DOWN:
+        case SHIFT_ARROW_LEFT:
+        case SHIFT_ARROW_RIGHT: {
+            if (!E.sel_active) {
+                E.sel_active = 1;
+                E.sel_start_cx = E.cx;
+                E.sel_start_cy = E.cy;
+            }
+            int base_key = ARROW_LEFT + (c - SHIFT_ARROW_LEFT);
+            editorMoveCursor(base_key);
+            break;
+        }
 
         case CTRL_ARROW_LEFT:
         case CTRL_ARROW_RIGHT:
@@ -2394,7 +3016,10 @@ void editorProcessKeypress(void) {
             break;
 
         case CTRL_KEY('l'):
+            break;
+
         case '\x1b':
+            editorClearSelection();
             break;
 
         default:
@@ -2419,10 +3044,12 @@ void editorPrintUsage(const char *progname) {
            "  Ctrl-F             Incremental search (Arrows to cycle, Esc to cancel)\n"
            "  Ctrl-G             Jump to a specific line number\n"
            "  Ctrl-R             Reload ~/.tedrc configuration live\n"
+           "  Shift+Arrows       Select text range (or drag with mouse)\n"
+           "  Ctrl-C / X / V     Copy / Cut / Paste selected range\n"
            "  Ctrl-D             Duplicate current line\n"
            "  Ctrl-K / Ctrl-U    Cut current line / Paste line below cursor\n"
            "  Ctrl-Z / Ctrl-Y    Undo / Redo\n"
-           "  Tab / Shift-Tab    Indent / Outdent line\n"
+           "  Tab / Shift-Tab    Indent / Outdent line or selected block\n"
            "  Ctrl-Left/Right    Jump backward / forward by word\n"
            "  Ctrl-Backspace     Delete previous word\n"
            "  Ctrl-Q             Quit (press %d more time(s) to discard unsaved changes)\n",
@@ -2451,12 +3078,16 @@ void initEditor(const char *config_path) {
     E.undo_cap = 0;
     E.in_undo_redo = 0;
     E.clipboard = NULL;
+    E.clipboard_is_line = 0;
     E.filename = NULL;
     E.config_path = config_path ? strdup(config_path) : NULL;
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
     E.syntax = NULL;
     E.resized = 0;
+    E.sel_active = 0;
+    E.sel_start_cx = 0;
+    E.sel_start_cy = 0;
     E.mouse_btn = 0;
     E.mouse_x = 0;
     E.mouse_y = 0;
