@@ -9,7 +9,7 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
  | ||  __/| (_| |
   \__\___| \__,_|
 
-TinyEDitor  v0.7.1
+TinyEDitor  v0.7.3
 ```
 
 ## Features
