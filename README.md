@@ -13,14 +13,14 @@ TinyEDitor  v0.7.1
 ```
 
 ## Features
-- Zero External Dependencies:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
-- C/C++ Syntax Highlighting:<br/>Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (//) or multi-line (/* ... */) comments for .c, .h, and .cpp files.
-- Matching Bracket Highlighting: Automatically highlights matching ( ), [ ], and { } delimiters under the cursor while ignoring brackets inside strings and comments.
-- Incremental Search (Ctrl-F): Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
-- Atomic Undo / Redo (Ctrl-Z / Ctrl-Y): Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
-- Smart Indentation & Soft Tabs: Preserves leading indentation on Enter, adds an extra 4-space indent after {, and supports 4-space Tab alignment and Shift-Tab outdentation.
-- Dynamic Line-Number Gutter: Scales automatically with total file line count.
-- Live Terminal Resizing: Responds immediately to terminal window resizes via SIGWINCH.
+- **Zero External Dependencies**:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
+- **C/C++ Syntax Highlighting**:<br/>Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (//) or multi-line (/* ... */) comments for .c, .h, and .cpp files.
+- **Matching Bracket Highlighting**:br/>Automatically highlights matching ( ), [ ], and { } delimiters under the cursor while ignoring brackets inside strings and comments.
+- **Incremental Search (Ctrl-F)**:<br/>Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
+- **Atomic Undo / Redo (Ctrl-Z / Ctrl-Y)**:<br/>Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
+- **Smart Indentation & Soft Tabs**:<br/>Preserves leading indentation on Enter, adds an extra 4-space indent after {, and supports 4-space Tab alignment and Shift-Tab outdentation.
+- **Dynamic Line-Number Gutter**:<br/>Scales automatically with total file line count.
+- **Live Terminal Resizing**:<br/>Responds immediately to terminal window resizes via SIGWINCH.
 
 ![TED-splash-0.7.0](images/TED-splash.png)
 
