@@ -13,8 +13,8 @@ TinyEDitor  v0.7.1
 ```
 
 ## Features
-- Zero External Dependencies: Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
-- C/C++ Syntax Highlighting: Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (//) or multi-line (/* ... */) comments for .c, .h, and .cpp files.
+- Zero External Dependencies:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
+- C/C++ Syntax Highlighting:<br/>Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (//) or multi-line (/* ... */) comments for .c, .h, and .cpp files.
 - Matching Bracket Highlighting: Automatically highlights matching ( ), [ ], and { } delimiters under the cursor while ignoring brackets inside strings and comments.
 - Incremental Search (Ctrl-F): Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
 - Atomic Undo / Redo (Ctrl-Z / Ctrl-Y): Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
