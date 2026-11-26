@@ -12,9 +12,7 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 TinyEDitor  v0.7.1
 ```
 
-![TED-splash-0.7.0](images/TED-splash.png)
-
-##Features
+## Features
 - Zero External Dependencies: Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
 - C/C++ Syntax Highlighting: Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (//) or multi-line (/* ... */) comments for .c, .h, and .cpp files.
 - Matching Bracket Highlighting: Automatically highlights matching ( ), [ ], and { } delimiters under the cursor while ignoring brackets inside strings and comments.
@@ -24,7 +22,7 @@ TinyEDitor  v0.7.1
 - Dynamic Line-Number Gutter: Scales automatically with total file line count.
 - Live Terminal Resizing: Responds immediately to terminal window resizes via SIGWINCH.
 
-![TED](images/TED.png)
+![TED-splash-0.7.0](images/TED-splash.png)
 
 ## Architecture
 
