@@ -2273,12 +2273,6 @@ int main(int argc, char *argv[]) {
         editorOpen((char *)filename);
     }
 
-    enableRawMode();
-    initEditor(config_path);
-    if (filename != NULL) {
-        editorOpen((char *)filename);
-    }
-
     if (E.statusmsg[0] == '\0') {
         editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-G = goto | Ctrl-Z/Y = undo/redo | Ctrl-Q = quit");
     }
