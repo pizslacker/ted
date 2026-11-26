@@ -64,7 +64,7 @@ Building a text editor in C comes down to three key upfront architectural decisi
   - **UI Backend**
       > A terminal interface using raw ANSI escape sequences (like the classic kilo editor, under 1,000 lines of standard C with zero dependencies), an `ncurses` TUI, or a graphical window using SDL2 or GTK.
   
-  `ted` does not depend on `libcurses`, `SDL2` or `GTK`, it directly emits VT100 escapes on the terminal and uses raw input.
+  `ted` does not depend on `libcurses`, `SDL2` or `GTK`, it directly emits ANSI escape sequences on the terminal and uses raw input.
 
   - **Buffer Data Structure**
       > An array of row structs (simplest for getting a working prototype on screen fast), a gap buffer (ideal for local cursor insertions), or a piece table / rope (best for large files and unlimited undo/redo).
