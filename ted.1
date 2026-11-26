@@ -1,4 +1,4 @@
-.TH TED 1 "November 2026" "ted 0.7.3" "User Commands"
+.TH TED 1 "November 2026" "ted 0.7.2" "User Commands"
 .SH NAME
 ted \- minimal zero-dependency terminal text editor
 .SH SYNOPSIS
@@ -133,4 +133,106 @@ looks for a plain-text
 .B key = value
 configuration file in the following order unless overridden with
 .BR \-c / \-\-config :
-.IP
+.IP 1. 4
+.I ~/.tedrc
+.IP 2. 4
+.I $XDG_CONFIG_HOME/ted/tedrc
+(or
+.I ~/.config/ted/tedrc
+if
+.B XDG_CONFIG_HOME
+is unset)
+.PP
+Blank lines and comments starting with
+.B #
+or
+.B ;
+are ignored. Booleans accept
+.BR true / false ,
+.BR yes / no ,
+.BR on / off ,
+or
+.BR 1 / 0 .
+Color keys accept standard ANSI SGR codes
+.RB ( 30 \(en 37 ", " 90 \(en 97 )
+or color names
+.RB ( black ", " red ", " green ", " yellow ", " blue ", " magenta ", " cyan ", " white ", " gray ).
+.TP
+.BI tab_stop " = 4"
+Tab stop width in columns (integer,
+.BR 1 \(en 16 ).
+.TP
+.BI auto_indent " = true"
+Enable automatic indentation on
+.B Enter
+(boolean).
+.TP
+.BI line_numbers " = true"
+Display the left-hand line-number gutter (boolean).
+.TP
+.BI quit_times " = 2"
+Extra
+.B Ctrl-Q
+confirmations required when quitting with unsaved changes (integer,
+.BR 0 \(en 10 ).
+.TP
+.BI color_comment " = 36"
+Syntax color for single-line and multi-line comments (default: cyan).
+.TP
+.BI color_keyword " = 33"
+Syntax color for control-flow keywords and preprocessor directives (default: yellow).
+.TP
+.BI color_type " = 32"
+Syntax color for C/C++ types (default: green).
+.TP
+.BI color_string " = 35"
+Syntax color for string and character literals (default: magenta).
+.TP
+.BI color_number " = 31"
+Syntax color for numeric literals (default: red).
+.TP
+.BI color_match " = 34"
+Highlight color for incremental search matches (default: blue).
+.TP
+.BI color_gutter " = 90"
+Color for line numbers and
+.B ~
+empty-row markers (default: gray).
+.SH SYNTAX & BRACKET HIGHLIGHTING
+.B ted
+automatically enables C-family syntax highlighting (keywords, preprocessor directives, primitive types, strings, character literals, numbers, and single-line or multi-line comments) when editing files ending in
+.BR .c ,
+.BR .h ,
+or
+.BR .cpp .
+.PP
+Whenever the cursor rests on a delimiter
+.RB ( ( ", " ) ", " [ ", " ] ", " { ", or " } )
+outside of strings and comments,
+.B ted
+highlights both the delimiter under the cursor and its matching partner in bold reverse video.
+.SH FILES
+.TP
+.I ~/.tedrc
+Default per-user configuration file.
+.TP
+.I $XDG_CONFIG_HOME/ted/tedrc
+Fallback XDG configuration path (defaults to
+.IR ~/.config/ted/tedrc ).
+.SH EXIT STATUS
+.TP
+.B 0
+Normal exit via
+.BR Ctrl-Q ,
+.BR \-\-help ,
+or
+.BR \-\-version .
+.TP
+.B 1
+An invalid command-line option was passed, or a fatal terminal or file I/O error occurred.
+.SH AUTHOR
+Written by k!M (pizslacker).
+.SH SEE ALSO
+.BR vi (1),
+.BR nano (1),
+.BR termios (3)
