@@ -39,7 +39,8 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.7.5"
+#define TED_VERSION "0.7.6"
+#define TED_MOUSE_SCROLL_LINES 3
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
@@ -57,7 +58,8 @@ enum editorKey {
     END_KEY,
     PAGE_UP,
     PAGE_DOWN,
-    RESIZE_EVENT
+    RESIZE_EVENT,
+    MOUSE_EVENT
 };
 
 enum editorHighlight {
@@ -143,6 +145,12 @@ struct editorConfig {
     struct termios orig_termios;
     volatile sig_atomic_t resized;
 
+    // XTerm SGR mouse event state
+    int mouse_btn;                  // SGR button bitmask (0=left, 64=wheel up, 65=wheel down)
+    int mouse_x;                    // 1-based terminal column
+    int mouse_y;                    // 1-based terminal row
+    int mouse_release;              // 1 if 'm' (button release), 0 if 'M' (press/wheel)
+
     // Runtime configuration options (~/.tedrc)
     int tab_stop;                   // Default: 4 (clamped 1..16)
     int auto_indent;                // Default: 1
@@ -197,6 +205,7 @@ int editorRowCxToRx(erow *row, int cx);
 /*** terminal ***/
 
 void die(const char *s) {
+    write(STDOUT_FILENO, "\x1b[?1006l\x1b[?1000l", 16);
     tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios);
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
@@ -206,6 +215,7 @@ void die(const char *s) {
 }
 
 void disableRawMode(void) {
+    write(STDOUT_FILENO, "\x1b[?1006l\x1b[?1000l", 16);
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1) {
         die("tcsetattr");
     }
@@ -228,6 +238,9 @@ void enableRawMode(void) {
     if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) {
         die("tcsetattr");
     }
+
+    // Enable X11 button/wheel events (1000) + SGR decimal coordinates (1006)
+    write(STDOUT_FILENO, "\x1b[?1000h\x1b[?1006h", 16);
 }
 
 int editorReadKey(void) {
@@ -251,7 +264,32 @@ int editorReadKey(void) {
         if (read(STDIN_FILENO, &seq[1], 1) != 1) return '\x1b';
 
         if (seq[0] == '[') {
-            if (seq[1] >= '0' && seq[1] <= '9') {
+            if (seq[1] == '<') {
+                // SGR mouse packet: ESC [ < Cb ; Cx ; Cy (M or m)
+                char mbuf[32];
+                unsigned int mlen = 0;
+                char term = 0;
+                while (mlen < sizeof(mbuf) - 1) {
+                    char ch;
+                    if (read(STDIN_FILENO, &ch, 1) != 1) return '\x1b';
+                    if (ch == 'M' || ch == 'm') {
+                        term = ch;
+                        break;
+                    }
+                    mbuf[mlen++] = ch;
+                }
+                mbuf[mlen] = '\0';
+
+                int cb = 0, cx = 0, cy = 0;
+                if (term && sscanf(mbuf, "%d;%d;%d", &cb, &cx, &cy) == 3) {
+                    E.mouse_btn = cb;
+                    E.mouse_x = cx;
+                    E.mouse_y = cy;
+                    E.mouse_release = (term == 'm') ? 1 : 0;
+                    return MOUSE_EVENT;
+                }
+                return '\x1b';
+            } else if (seq[1] >= '0' && seq[1] <= '9') {
                 if (read(STDIN_FILENO, &seq[2], 1) != 1) return '\x1b';
                 if (seq[2] == '~') {
                     switch (seq[1]) {
@@ -1943,6 +1981,8 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int)) {
             E.resized = 0;
             editorUpdateWindowSize();
             continue;
+        } else if (c == MOUSE_EVENT) {
+            continue;
         } else if (c == DEL_KEY || c == CTRL_BACKSPACE || c == BACKSPACE) {
             if (buflen != 0) buf[--buflen] = '\0';
         } else if (c == '\x1b') {
@@ -2008,6 +2048,69 @@ void editorMoveCursor(int key) {
     }
 }
 
+void editorHandleMouse(void) {
+    if (E.mouse_release) return; // Ignore button-release packets
+
+    // Strip modifier bits (Shift=4, Meta=8, Ctrl=16)
+    int btn = E.mouse_btn & ~0x1c;
+
+    if (btn == 64) {
+        // Scroll wheel up
+        if (E.rowoff > 0) {
+            E.rowoff -= TED_MOUSE_SCROLL_LINES;
+            if (E.rowoff < 0) E.rowoff = 0;
+            if (E.cy >= E.rowoff + E.screenrows) {
+                E.cy = E.rowoff + E.screenrows - 1;
+                if (E.cy < 0) E.cy = 0;
+                int rowlen = (E.cy < E.numrows) ? E.row[E.cy].size : 0;
+                if (E.cx > rowlen) E.cx = rowlen;
+            }
+        }
+        return;
+    }
+
+    if (btn == 65) {
+        // Scroll wheel down
+        if (E.numrows > E.screenrows && E.rowoff < E.numrows - E.screenrows) {
+            E.rowoff += TED_MOUSE_SCROLL_LINES;
+            if (E.rowoff > E.numrows - E.screenrows) {
+                E.rowoff = E.numrows - E.screenrows;
+            }
+            if (E.cy < E.rowoff) {
+                E.cy = E.rowoff;
+                int rowlen = (E.cy < E.numrows) ? E.row[E.cy].size : 0;
+                if (E.cx > rowlen) E.cx = rowlen;
+            }
+        }
+        return;
+    }
+
+    if (btn == 0) {
+        // Left-click inside the text viewport (ignore status/message bars)
+        int click_row = E.mouse_y - 1;
+        if (click_row < 0 || click_row >= E.screenrows) return;
+        if (E.numrows == 0) return;
+
+        int target_cy = click_row + E.rowoff;
+        if (target_cy >= E.numrows) {
+            target_cy = E.numrows - 1;
+        }
+        E.cy = target_cy;
+
+        int gutter = editorGutterWidth();
+        int click_col = (E.mouse_x - 1) - gutter;
+        if (click_col < 0) click_col = 0;
+
+        int target_rx = click_col + E.coloff;
+        erow *row = &E.row[E.cy];
+        if (target_rx >= row->rsize) {
+            E.cx = row->size;
+        } else {
+            E.cx = editorRowRxToCx(row, target_rx);
+        }
+    }
+}
+
 void editorProcessKeypress(void) {
     static int quit_times = -1;
     if (quit_times == -1) quit_times = E.quit_times;
@@ -2018,6 +2121,10 @@ void editorProcessKeypress(void) {
         case RESIZE_EVENT:
             E.resized = 0;
             editorUpdateWindowSize();
+            return;
+
+        case MOUSE_EVENT:
+            editorHandleMouse();
             return;
 
         case '\r':
@@ -2193,6 +2300,10 @@ void initEditor(const char *config_path) {
     E.statusmsg_time = 0;
     E.syntax = NULL;
     E.resized = 0;
+    E.mouse_btn = 0;
+    E.mouse_x = 0;
+    E.mouse_y = 0;
+    E.mouse_release = 0;
 
     // Default runtime settings (overridable via ~/.tedrc)
     E.tab_stop = 4;
@@ -2243,7 +2354,7 @@ int main(int argc, char *argv[]) {
                 filename = argv[i + 1];
             }
             break;
-        } else if (argv[i][0] == '-' && argv[i][1] != '\0') {
+        } else if (argv[i][0] == '-') {
             fprintf(stderr, "%s: unrecognized option '%s'\n"
                             "Try '%s --help' for more information.\n",
                     argv[0], argv[i], argv[0]);

@@ -1,4 +1,4 @@
-.TH TED 1 "November 2026" "ted 0.7.5" "User Commands"
+.TH TED 1 "November 2026" "ted 0.7.6" "User Commands"
 .SH NAME
 ted \- minimal zero-dependency terminal text editor
 .SH SYNOPSIS
@@ -13,9 +13,11 @@ input and ANSI escape sequences. If
 .I FILE
 is specified,
 .B ted
-opens it for editing; otherwise, it starts with an empty buffer and displays a centered ASCII splash banner until text is entered.
+opens it for editing (or initializes a new named buffer if
+.I FILE
+does not exist yet); otherwise, it starts with an empty buffer and displays a centered ASCII splash banner until text is entered.
 .PP
-Features include C/C++ syntax highlighting, matching bracket and parenthesis highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, soft-tab indentation and outdentation, line duplication and cut/paste, a dynamic line-number gutter, runtime configuration via
+Features include C/C++ syntax highlighting, matching bracket and parenthesis highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, soft-tab indentation and outdentation, line duplication and cut/paste, XTerm SGR mouse support, a dynamic line-number gutter, runtime configuration via
 .IR ~/.tedrc ,
 and live terminal window resizing via
 .BR SIGWINCH .
@@ -35,7 +37,7 @@ Output version information and exit.
 .B \-\-
 Terminate option parsing. Useful when opening a file whose name begins with
 .BR \- .
-.SH KEYBINDINGS
+.SH KEYBINDINGS & MOUSE
 .SS File & Application Control
 .TP
 .B Ctrl-S
@@ -82,6 +84,9 @@ Move the cursor to the beginning or end of the current line.
 .TP
 .B Page Up / Page Down
 Scroll the viewport up or down by one full screen height.
+.TP
+.B Mouse Left-Click & Scroll Wheel
+Click anywhere inside the editor viewport to position the cursor (accounting for the line-number gutter, horizontal scroll offset, and tab stops), or use the scroll wheel to scroll vertically by 3 lines per tick via XTerm SGR mouse reporting.
 .SS Editing, Indentation & History
 .TP
 .B Ctrl-Z
@@ -229,7 +234,7 @@ or
 .BR \-\-version .
 .TP
 .B 1
-An invalid command-line option was passed, or a fatal terminal or file I/O error occurred.
+An invalid command-line option was passed, the target path is a directory or inaccessible, or a fatal terminal or file I/O error occurred.
 .SH AUTHOR
 Written by k!M (pizslacker).
 .SH SEE ALSO
