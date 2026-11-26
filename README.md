@@ -35,8 +35,6 @@ TinyEDitor  v0.8.1
 
 - **Safe File Handling & Live Resizing**:<br/>Validates directories and permissions before entering raw terminal mode, opens new named buffers cleanly when a target file does not yet exist, scales the line-number gutter dynamically, and responds immediately to terminal resizes via SIGWINCH.
 
-- **Live Terminal Resizing**:<br/>Responds immediately to terminal window resizes via SIGWINCH.
-
 ![TED-splash-0.7.0](images/TED-splash.png)
 
 ### Building & Installation
