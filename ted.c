@@ -39,7 +39,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.8.1"
+#define TED_VERSION "0.8.2"
 #define TED_MOUSE_SCROLL_LINES 3
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -117,7 +117,7 @@ typedef struct erow {
     char *chars;            // Raw line content
     char *render;           // Rendered line content (tabs expanded)
     unsigned char *hl;      // Syntax highlight type per rendered byte
-    int hl_open_comment;    // Non-zero if line ends inside an unclosed /* comment
+    int hl_open_comment;    // Non-zero if line ends inside an unclosed /* or """ comment
 } erow;
 
 struct editorConfig {
@@ -169,8 +169,8 @@ struct editorConfig E;
 
 /*** filetypes ***/
 
-char *C_HL_extensions[] = { ".c", ".h", ".cpp", NULL };
-
+/* C / C++ */
+char *C_HL_extensions[] = { ".c", ".h", ".cpp", ".hpp", ".cc", NULL };
 char *C_HL_keywords[] = {
     "switch", "if", "while", "for", "break", "continue", "return", "else",
     "struct", "union", "typedef", "static", "enum", "class", "case",
@@ -183,12 +183,135 @@ char *C_HL_keywords[] = {
     "int8_t|", "int16_t|", "int32_t|", "int64_t|", "bool|", "FILE|", NULL
 };
 
+/* Python */
+char *PY_HL_extensions[] = { ".py", ".pyw", NULL };
+char *PY_HL_keywords[] = {
+    "def", "class", "if", "elif", "else", "for", "while", "break",
+    "continue", "return", "import", "from", "as", "try", "except",
+    "finally", "raise", "with", "yield", "lambda", "pass", "in", "is",
+    "not", "and", "or", "async", "await", "global", "nonlocal", "del",
+    "assert",
+
+    "int|", "str|", "float|", "bool|", "list|", "dict|", "tuple|", "set|",
+    "bytes|", "bytearray|", "None|", "True|", "False|", "self|", "cls|", NULL
+};
+
+/* POSIX Shell / Bash */
+char *SH_HL_extensions[] = { ".sh", ".bash", ".zsh", NULL };
+char *SH_HL_keywords[] = {
+    "if", "then", "else", "elif", "fi", "for", "while", "until", "do",
+    "done", "case", "esac", "in", "function", "return", "exit", "break",
+    "continue", "source",
+
+    "local|", "export|", "readonly|", "declare|", "typeset|", "unset|",
+    "shift|", "eval|", "exec|", "trap|", "set|", "echo|", "printf|",
+    "read|", "test|", "true|", "false|", NULL
+};
+
+/* Makefile */
+char *MK_HL_extensions[] = { "Makefile", "makefile", "GNUmakefile", ".mk", NULL };
+char *MK_HL_keywords[] = {
+    "ifeq", "ifneq", "ifdef", "ifndef", "else", "endif", "include",
+    "-include", "sinclude", "define", "endef", "override", "export",
+    "unexport", "vpath",
+
+    ".PHONY|", ".DEFAULT_GOAL|", ".SUFFIXES|", ".SILENT|", ".ONESHELL|",
+    "CC|", "CXX|", "CFLAGS|", "CXXFLAGS|", "LDFLAGS|", "LDLIBS|",
+    "PREFIX|", "DESTDIR|", "BINDIR|", "MANDIR|", "SHELL|", "wildcard|",
+    "patsubst|", "subst|", "shell|", "addprefix|", "addsuffix|", NULL
+};
+
+/* Rust */
+char *RS_HL_extensions[] = { ".rs", NULL };
+char *RS_HL_keywords[] = {
+    "fn", "let", "mut", "const", "static", "if", "else", "match", "for",
+    "while", "loop", "break", "continue", "return", "struct", "enum",
+    "trait", "impl", "type", "pub", "mod", "use", "crate", "super",
+    "where", "as", "in", "ref", "move", "async", "await", "unsafe", "extern",
+
+    "i8|", "i16|", "i32|", "i64|", "i128|", "isize|", "u8|", "u16|",
+    "u32|", "u64|", "u128|", "usize|", "f32|", "f64|", "bool|", "char|",
+    "str|", "String|", "Vec|", "Option|", "Result|", "Some|", "None|",
+    "Ok|", "Err|", "self|", "Self|", "true|", "false|", NULL
+};
+
+/* Go */
+char *GO_HL_extensions[] = { ".go", NULL };
+char *GO_HL_keywords[] = {
+    "func", "var", "const", "type", "struct", "interface", "map", "chan",
+    "package", "import", "if", "else", "switch", "case", "default", "for",
+    "range", "break", "continue", "return", "goto", "fallthrough", "defer",
+    "go", "select",
+
+    "int|", "int8|", "int16|", "int32|", "int64|", "uint|", "uint8|",
+    "uint16|", "uint32|", "uint64|", "uintptr|", "float32|", "float64|",
+    "complex64|", "complex128|", "bool|", "byte|", "rune|", "string|",
+    "error|", "any|", "true|", "false|", "nil|", "iota|", NULL
+};
+
+/* Zig */
+char *ZIG_HL_extensions[] = { ".zig", NULL };
+char *ZIG_HL_keywords[] = {
+    "fn", "const", "var", "pub", "extern", "export", "inline", "noinline",
+    "comptime", "struct", "enum", "union", "error", "if", "else", "switch",
+    "while", "for", "break", "continue", "return", "defer", "errdefer",
+    "try", "catch", "orelse", "and", "or", "unreachable", "test",
+    "@import", "@cImport", "@as", "@intCast", "@ptrCast", "@sizeof",
+
+    "i8|", "i16|", "i32|", "i64|", "i128|", "isize|", "u8|", "u16|",
+    "u32|", "u64|", "u128|", "usize|", "f16|", "f32|", "f64|", "f128|",
+    "bool|", "void|", "noreturn|", "type|", "anyerror|", "anyopaque|",
+    "c_int|", "c_uint|", "c_char|", "true|", "false|", "null|", "undefined|", NULL
+};
+
 struct editorSyntax HLDB[] = {
     {
         "c",
         C_HL_extensions,
         C_HL_keywords,
         "//", "/*", "*/",
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+    },
+    {
+        "python",
+        PY_HL_extensions,
+        PY_HL_keywords,
+        "#", "\"\"\"", "\"\"\"",
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+    },
+    {
+        "sh",
+        SH_HL_extensions,
+        SH_HL_keywords,
+        "#", NULL, NULL,
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+    },
+    {
+        "makefile",
+        MK_HL_extensions,
+        MK_HL_keywords,
+        "#", NULL, NULL,
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+    },
+    {
+        "rust",
+        RS_HL_extensions,
+        RS_HL_keywords,
+        "//", "/*", "*/",
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+    },
+    {
+        "go",
+        GO_HL_extensions,
+        GO_HL_keywords,
+        "//", "/*", "*/",
+        HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+    },
+    {
+        "zig",
+        ZIG_HL_extensions,
+        ZIG_HL_keywords,
+        "//", NULL, NULL,
         HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
     },
 };
@@ -436,7 +559,7 @@ void editorUpdateSyntax(erow *row) {
             }
         }
 
-        // Multi-line comments
+        // Multi-line comments (and Python """ docstrings)
         if (mcs_len && mce_len && !in_string) {
             if (in_comment) {
                 row->hl[i] = HL_MLCOMMENT;
@@ -539,27 +662,53 @@ int editorSyntaxToColor(int hl) {
     }
 }
 
+static void editorApplySyntax(struct editorSyntax *s) {
+    E.syntax = s;
+    for (int filerow = 0; filerow < E.numrows; filerow++) {
+        editorUpdateSyntax(&E.row[filerow]);
+    }
+}
+
 void editorSelectSyntaxHighlight(void) {
     E.syntax = NULL;
-    if (E.filename == NULL) return;
 
-    char *ext = strrchr(E.filename, '.');
+    if (E.filename != NULL) {
+        const char *slash = strrchr(E.filename, '/');
+        const char *base = slash ? slash + 1 : E.filename;
+        char *ext = strrchr(base, '.');
 
-    for (unsigned int j = 0; j < HLDB_ENTRIES; j++) {
-        struct editorSyntax *s = &HLDB[j];
-        unsigned int i = 0;
-        while (s->filematch[i]) {
-            int is_ext = (s->filematch[i][0] == '.');
-            if ((is_ext && ext && !strcmp(ext, s->filematch[i])) ||
-                (!is_ext && strstr(E.filename, s->filematch[i]))) {
-                E.syntax = s;
-
-                for (int filerow = 0; filerow < E.numrows; filerow++) {
-                    editorUpdateSyntax(&E.row[filerow]);
+        for (unsigned int j = 0; j < HLDB_ENTRIES; j++) {
+            struct editorSyntax *s = &HLDB[j];
+            for (unsigned int i = 0; s->filematch[i]; i++) {
+                int is_ext = (s->filematch[i][0] == '.');
+                if ((is_ext && ext && !strcmp(ext, s->filematch[i])) ||
+                    (!is_ext && !strcmp(base, s->filematch[i]))) {
+                    editorApplySyntax(s);
+                    return;
                 }
-                return;
             }
-            i++;
+        }
+    }
+
+    // Fallback: inspect shebang on line 1 (e.g., #!/usr/bin/env python3, #!/bin/sh)
+    if (E.numrows > 0 && E.row[0].size > 2 &&
+        E.row[0].chars[0] == '#' && E.row[0].chars[1] == '!') {
+        const char *target = NULL;
+        if (strstr(E.row[0].chars, "python")) {
+            target = "python";
+        } else if (strstr(E.row[0].chars, "bash") ||
+                   strstr(E.row[0].chars, "zsh") ||
+                   strstr(E.row[0].chars, "/sh")) {
+            target = "sh";
+        }
+
+        if (target != NULL) {
+            for (unsigned int j = 0; j < HLDB_ENTRIES; j++) {
+                if (strcmp(HLDB[j].filetype, target) == 0) {
+                    editorApplySyntax(&HLDB[j]);
+                    return;
+                }
+            }
         }
     }
 }
@@ -1355,6 +1504,12 @@ void editorOpen(char *filename) {
     }
     free(line);
     fclose(fp);
+
+    // Re-evaluate syntax in case an extensionless file starts with a #! shebang
+    if (E.syntax == NULL) {
+        editorSelectSyntaxHighlight();
+    }
+
     editorClearUndoHistory();
     E.dirty = 0;
 }
@@ -1366,6 +1521,8 @@ void editorSave(void) {
             editorSetStatusMessage("Save aborted");
             return;
         }
+        editorSelectSyntaxHighlight();
+    } else if (E.syntax == NULL) {
         editorSelectSyntaxHighlight();
     }
 
