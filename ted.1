@@ -1,21 +1,33 @@
-.TH TED 1 "November 2026" "ted 0.7.1" "User Commands"
+.TH TED 1 "November 2026" "ted 0.7.2" "User Commands"
 .SH NAME
-tinyEDitor \- minimal zero-dependency terminal text editor
+ted \- minimal zero-dependency terminal text editor
 .SH SYNOPSIS
 .B ted
-.RI [ file ]
+.RI [ OPTION ]...
+.RI [ FILE ]
 .SH DESCRIPTION
 .B ted
 is a lightweight, zero-dependency terminal text editor written in C99 using raw
 .BR termios (3)
 input and ANSI escape sequences. If
-.I file
+.I FILE
 is specified,
 .B ted
 opens it for editing; otherwise, it starts with an empty buffer and displays a centered ASCII splash banner until text is entered.
 .PP
-Features include C/C++ syntax highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, a dynamic line-number gutter, and live terminal window resizing via
+Features include C/C++ syntax highlighting, matching bracket and parenthesis highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, soft-tab indentation and outdentation, line duplication and cut/paste, a dynamic line-number gutter, and live terminal window resizing via
 .BR SIGWINCH .
+.SH OPTIONS
+.TP
+.BR \-h ", " \-\-help
+Display a usage summary and keybinding reference, then exit.
+.TP
+.BR \-v ", " \-\-version
+Output version information and exit.
+.TP
+.B \-\-
+Terminate option parsing. Useful when opening a file whose name begins with
+.BR \- .
 .SH KEYBINDINGS
 .SS File & Application Control
 .TP
@@ -28,6 +40,7 @@ Quit
 If the buffer contains unsaved changes, pressing
 .B Ctrl-Q
 three times in succession is required to discard modifications and exit.
+.SS Search & Navigation
 .TP
 .B Ctrl-F
 Enter incremental search mode. Type a query to jump to matches in real time; use
@@ -38,34 +51,13 @@ arrow keys to cycle backward and forward through matches,
 .B Enter
 to confirm the jump, or
 .B Esc
-to cancel and restore the original cursor position.
-.SS Editing & History
+to cancel and restore the original cursor and scroll position.
 .TP
-.B Ctrl-Z
-Undo the last character insertion, deletion, line split, or line join.
-.TP
-.B Ctrl-Y
-Redo the most recently undone edit.
-.TP
-.B Enter
-Insert a newline, preserving the current line's leading indentation and adding an extra 4-space indent level if the line ends with
-.BR { .
-.TP
-.B Backspace
-Delete the character before the cursor, or merge the current line onto the end of the previous line when at column 1.
-.TP
-.B Ctrl-Backspace / Ctrl-H
-Delete the previous word (or delimiter run) before the cursor.
-.TP
-.B Delete
-Delete the character under the cursor.
-.SS Navigation
+.B Ctrl-G
+Prompt for a 1-based line number and jump directly to that line, centering it vertically in the viewport.
 .TP
 .B Arrow Keys
 Move the cursor one character or line at a time, wrapping across line boundaries at the start and end of lines.
-.TP
-.B Ctrl-G
-Prompt for a 1-based line number and jump directly to that line, centering it in the viewport.
 .TP
 .B Ctrl-Left / Ctrl-Right
 Jump backward or forward by one word.
@@ -75,23 +67,65 @@ Move the cursor to the beginning or end of the current line.
 .TP
 .B Page Up / Page Down
 Scroll the viewport up or down by one full screen height.
-.SH SYNTAX HIGHLIGHTING
+.SS Editing, Indentation & History
+.TP
+.B Ctrl-Z
+Undo the last character insertion, deletion, word deletion, line split, line join, line duplication, or line cut/paste.
+.TP
+.B Ctrl-Y
+Redo the most recently undone edit.
+.TP
+.B Enter
+Insert a newline, preserving the current line's leading indentation and adding an extra 4-space indent level if the line ends with
+.BR { .
+.TP
+.B Tab
+Insert spaces up to the next 4-column tab stop.
+.TP
+.B Shift-Tab
+Outdent the current line by removing up to 4 leading spaces (or one leading tab character).
+.TP
+.B Ctrl-D
+Duplicate the current line directly below the cursor.
+.TP
+.B Ctrl-K
+Cut the current line into the internal clipboard and remove it from the buffer.
+.TP
+.B Ctrl-U
+Paste the cut line from the internal clipboard directly below the current line.
+.TP
+.B Backspace
+Delete the character before the cursor, or merge the current line onto the end of the previous line when at column 1.
+.TP
+.B Ctrl-Backspace / Ctrl-H
+Delete the previous word (or delimiter run) before the cursor.
+.TP
+.B Delete
+Delete the character under the cursor.
+.SH SYNTAX & BRACKET HIGHLIGHTING
 .B ted
 automatically enables C-family syntax highlighting (keywords, preprocessor directives, primitive types, strings, character literals, numbers, and single-line or multi-line comments) when editing files ending in
 .BR .c ,
 .BR .h ,
 or
 .BR .cpp .
+.PP
+Whenever the cursor rests on a delimiter
+.RB ( ( ", " ) ", " [ ", " ] ", " { ", or " } )
+outside of strings and comments,
+.B ted
+highlights both the delimiter under the cursor and its matching partner in bold reverse video.
 .SH EXIT STATUS
 .TP
 .B 0
 Normal exit via
-.BR Ctrl-Q .
+.BR Ctrl-Q ,
+.BR \-\-help ,
+or
+.BR \-\-version .
 .TP
 .B 1
-A fatal terminal or file I/O error occurred (reported via
-.BR perror (3)
-before exiting).
+An invalid command-line option was passed, or a fatal terminal or file I/O error occurred.
 .SH AUTHOR
 Written by k!M (pizslacker).
 .SH SEE ALSO

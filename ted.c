@@ -36,7 +36,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.7.1"
+#define TED_VERSION "0.7.2"
 #define TED_TAB_STOP 4
 #define TED_QUIT_TIMES 2
 #define CTRL_KEY(k) ((k) & 0x1f)
@@ -89,7 +89,9 @@ enum editOpType {
     OP_INSERT_CHAR,
     OP_DELETE_CHAR,
     OP_SPLIT_LINE,
-    OP_JOIN_LINE
+    OP_JOIN_LINE,
+    OP_INSERT_LINE,
+    OP_DELETE_LINE
 };
 
 typedef struct editOp {
@@ -97,8 +99,8 @@ typedef struct editOp {
     int cy;             // Target row index
     int cx;             // Target column index
     int ch;             // Character for INSERT_CHAR / DELETE_CHAR
-    char *indent;       // Auto-indent prefix inserted on SPLIT_LINE
-    int indent_len;     // Length of indent prefix
+    char *indent;       // Line payload or auto-indent prefix
+    int indent_len;     // Length of indent/line payload
     int before_cx;      // Cursor X before edit
     int before_cy;      // Cursor Y before edit
     int after_cx;       // Cursor X after edit
@@ -131,8 +133,9 @@ struct editorConfig {
     int undo_len;                   // Total valid entries (undo_top .. undo_len = redoable)
     int undo_cap;                   // Allocated capacity of undo_stack
     int in_undo_redo;               // Re-entrancy guard during replay
+    char *clipboard;                // Internal line cut/paste buffer
     char *filename;
-    char statusmsg[93];
+    char statusmsg[256];
     time_t statusmsg_time;
     struct editorSyntax *syntax;
     struct termios orig_termios;
@@ -243,7 +246,6 @@ int editorReadKey(void) {
                         case '6': return PAGE_DOWN;
                         case '7': return HOME_KEY;
                         case '8': return END_KEY;
-                        case 'Z': return SHIFT_TAB;
                     }
                 } else if (seq[1] == '1' && seq[2] == ';') {
                     // CSI 1;<mod><dir> (modifier 5 = Ctrl)
@@ -264,6 +266,7 @@ int editorReadKey(void) {
                     case 'D': return ARROW_LEFT;
                     case 'H': return HOME_KEY;
                     case 'F': return END_KEY;
+                    case 'Z': return SHIFT_TAB;
                 }
             }
         } else if (seq[0] == 'O') {
@@ -764,6 +767,14 @@ void editorUndo(void) {
             editorUpdateRow(prev);
             break;
         }
+
+        case OP_INSERT_LINE:
+            editorDelRow(op->cy);
+            break;
+
+        case OP_DELETE_LINE:
+            editorInsertRow(op->cy, op->indent ? op->indent : "", op->indent_len);
+            break;
     }
 
     E.cx = op->before_cx;
@@ -827,6 +838,14 @@ void editorRedo(void) {
             editorDelRow(op->cy);
             break;
         }
+
+        case OP_INSERT_LINE:
+            editorInsertRow(op->cy, op->indent ? op->indent : "", op->indent_len);
+            break;
+
+        case OP_DELETE_LINE:
+            editorDelRow(op->cy);
+            break;
     }
 
     E.cx = op->after_cx;
@@ -1062,7 +1081,6 @@ void editorDelWord(void) {
 }
 
 void editorIndent(void) {
-    // Insert spaces up to the next TED_TAB_STOP boundary
     int spaces = TED_TAB_STOP - (E.cx % TED_TAB_STOP);
     for (int i = 0; i < spaces; i++) {
         editorInsertChar(' ');
@@ -1118,6 +1136,119 @@ void editorOutdent(void) {
         E.cx -= removed;
         if (E.cx < 0) E.cx = 0;
     }
+}
+
+void editorDuplicateLine(void) {
+    if (E.cy >= E.numrows) return;
+
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+    erow *row = &E.row[E.cy];
+
+    int len = row->size;
+    char *copy = malloc(len + 1);
+    memcpy(copy, row->chars, len);
+    copy[len] = '\0';
+
+    editorInsertRow(E.cy + 1, copy, len);
+    E.cy++;
+    if (E.cx > E.row[E.cy].size) {
+        E.cx = E.row[E.cy].size;
+    }
+
+    editOp op = {
+        .type = OP_INSERT_LINE,
+        .cy = E.cy,
+        .cx = 0,
+        .ch = 0,
+        .indent = copy,
+        .indent_len = len,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
+    editorSetStatusMessage("Line duplicated");
+}
+
+void editorCutLine(void) {
+    if (E.cy >= E.numrows) return;
+
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+    erow *row = &E.row[E.cy];
+
+    int len = row->size;
+    char *saved = malloc(len + 1);
+    memcpy(saved, row->chars, len);
+    saved[len] = '\0';
+
+    free(E.clipboard);
+    E.clipboard = malloc(len + 1);
+    memcpy(E.clipboard, saved, len + 1);
+
+    editorDelRow(E.cy);
+    if (E.cy >= E.numrows && E.numrows > 0) {
+        E.cy = E.numrows - 1;
+    }
+    if (E.numrows == 0) {
+        E.cy = 0;
+        E.cx = 0;
+    } else if (E.cx > E.row[E.cy].size) {
+        E.cx = E.row[E.cy].size;
+    }
+
+    editOp op = {
+        .type = OP_DELETE_LINE,
+        .cy = before_cy,
+        .cx = 0,
+        .ch = 0,
+        .indent = saved,
+        .indent_len = len,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
+    editorSetStatusMessage("Line cut (Ctrl-U to paste)");
+}
+
+void editorPasteLine(void) {
+    if (E.clipboard == NULL) {
+        editorSetStatusMessage("Clipboard is empty");
+        return;
+    }
+
+    int before_cx = E.cx;
+    int before_cy = E.cy;
+    int target_row = (E.cy < E.numrows) ? E.cy + 1 : E.numrows;
+    int len = (int)strlen(E.clipboard);
+
+    char *copy = malloc(len + 1);
+    memcpy(copy, E.clipboard, len + 1);
+
+    editorInsertRow(target_row, copy, len);
+    E.cy = target_row;
+    if (E.cx > E.row[E.cy].size) {
+        E.cx = E.row[E.cy].size;
+    }
+
+    editOp op = {
+        .type = OP_INSERT_LINE,
+        .cy = E.cy,
+        .cx = 0,
+        .ch = 0,
+        .indent = copy,
+        .indent_len = len,
+        .before_cx = before_cx,
+        .before_cy = before_cy,
+        .after_cx = E.cx,
+        .after_cy = E.cy
+    };
+    editorPushUndo(op);
+    editorSetStatusMessage("Line pasted");
 }
 
 /*** file i/o ***/
@@ -1669,6 +1800,14 @@ void editorProcessKeypress(void) {
             editorInsertNewline();
             break;
 
+        case '\t':
+            editorIndent();
+            break;
+
+        case SHIFT_TAB:
+            editorOutdent();
+            break;
+
         case CTRL_KEY('q'):
             if (E.dirty && quit_times > 0) {
                 editorSetStatusMessage("WARNING!!! File has unsaved changes. "
@@ -1692,6 +1831,18 @@ void editorProcessKeypress(void) {
 
         case CTRL_KEY('g'):
             editorGotoLine();
+            break;
+
+        case CTRL_KEY('d'):
+            editorDuplicateLine();
+            break;
+
+        case CTRL_KEY('k'):
+            editorCutLine();
+            break;
+
+        case CTRL_KEY('u'):
+            editorPasteLine();
             break;
 
         case CTRL_KEY('z'):
@@ -1754,14 +1905,6 @@ void editorProcessKeypress(void) {
         case '\x1b':
             break;
 
-        case '\t':
-            editorIndent();
-            break;
-
-        case SHIFT_TAB:
-            editorOutdent();
-            break;
-
         default:
             editorInsertChar(c);
             break;
@@ -1782,7 +1925,10 @@ void editorPrintUsage(const char *progname) {
            "  Ctrl-S           Save buffer to disk\n"
            "  Ctrl-F           Incremental search (Arrows to cycle, Esc to cancel)\n"
            "  Ctrl-G           Jump to a specific line number\n"
+           "  Ctrl-D           Duplicate current line\n"
+           "  Ctrl-K / Ctrl-U  Cut current line / Paste line below cursor\n"
            "  Ctrl-Z / Ctrl-Y  Undo / Redo\n"
+           "  Tab / Shift-Tab  Indent / Outdent line\n"
            "  Ctrl-Left/Right  Jump backward / forward by word\n"
            "  Ctrl-Backspace   Delete previous word\n"
            "  Ctrl-Q           Quit (press 3x to discard unsaved changes)\n",
@@ -1810,6 +1956,7 @@ void initEditor(void) {
     E.undo_len = 0;
     E.undo_cap = 0;
     E.in_undo_redo = 0;
+    E.clipboard = NULL;
     E.filename = NULL;
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
