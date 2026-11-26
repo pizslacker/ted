@@ -1,25 +1,30 @@
-# TinyEDitor
+# ted — TinyEDitor
 
-Minimal zero-dependency terminal text editor in standard C.
+Minimal, zero-dependency terminal text editor written in C99 using raw `termios` input and ANSI escape sequences.
+
+```text
+  _            _
+ | |_ ___   __| |
+ | __/ _ \ / _` |
+ | ||  __/| (_| |
+  \__\___| \__,_|
+
+TinyEDitor  v0.7.1
+```
 
 ![TED-splash-0.7.0](images/TED-splash.png)
 
-## Features
-- Tiny self-contained editor
-- Zero external dependencies
-- ~1599 LOC (_Lines-Of-Code_)
-- Centered ASCII splash banner
-- Live SIGWINCH window-resize handling
-- Dynamic line numbers
-- Live C syntax highlighting
-- Smart auto-indentation
-- Tab/Shift-Tab: Indent/Outdent
-- Ctrl-Z/Y: Undo/Redo
-- Ctrl-F: Incremental Search
-- Ctrl-G: GOTO line
-- Word-level navigation
+##Features
+- Zero External Dependencies: Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
+- C/C++ Syntax Highlighting: Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (//) or multi-line (/* ... */) comments for .c, .h, and .cpp files.
+- Matching Bracket Highlighting: Automatically highlights matching ( ), [ ], and { } delimiters under the cursor while ignoring brackets inside strings and comments.
+- Incremental Search (Ctrl-F): Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
+- Atomic Undo / Redo (Ctrl-Z / Ctrl-Y): Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
+- Smart Indentation & Soft Tabs: Preserves leading indentation on Enter, adds an extra 4-space indent after {, and supports 4-space Tab alignment and Shift-Tab outdentation.
+- Dynamic Line-Number Gutter: Scales automatically with total file line count.
+- Live Terminal Resizing: Responds immediately to terminal window resizes via SIGWINCH.
 
-![TED-0.7.0](images/TED.png)
+![TED](images/TED.png)
 
 ## Architecture
 
