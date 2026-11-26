@@ -39,7 +39,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.7.6"
+#define TED_VERSION "0.8.1"
 #define TED_MOUSE_SCROLL_LINES 3
 #define CTRL_KEY(k) ((k) & 0x1f)
 
