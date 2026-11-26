@@ -9,19 +9,31 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
  | ||  __/| (_| |
   \__\___| \__,_|
 
-TinyEDitor  v0.7.5
+TinyEDitor  v0.8.1
 ```
 
 ## Features
 - **Zero External Dependencies**:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
+
 - **Runtime Configuration (`~/.tedrc` & `Ctrl-R`)**:<br/>Customize tab width, auto-indentation, line numbers, quit confirmations, and ANSI syntax colors via `~/.tedrc` or `$XDG_CONFIG_HOME/ted/tedrc`, and reload changes live with `Ctrl-R`.
+
+- **XTerm SGR Mouse Support**:<br/>Click anywhere in the text viewport to position the cursor (with full tab-stop and gutter awareness) and scroll smoothly using the mouse wheel.
+
 - **C/C++ Syntax Highlighting**:<br/>Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (`//`) or multi-line (`/* ... */`) comments for `.c`, `.h`, and `.cpp` files.
+
 - **Matching Bracket Highlighting**:<br/>Automatically highlights matching `( )`, `[ ]`, and `{ }` delimiters under the cursor while ignoring brackets inside strings and comments.
+
 - **Incremental Search (`Ctrl-F`)**:<br/>Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
+
 - **Atomic Undo / Redo (`Ctrl-Z` / `Ctrl-Y`)**:<br/>Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
+
 - **Smart Indentation & Soft Tabs**:<br/>Preserves leading indentation on Enter, adds an extra 4-space indent after `{`, and supports 4-space Tab alignment and Shift-Tab outdentation.
+
 - **Dynamic Line-Number Gutter**:<br/>Scales automatically with total file line count.
-- **Live Terminal Resizing**:<br/>Responds immediately to terminal window resizes via SIGWINCH.
+
+- **Line Manipulation (`Ctrl-D`, `Ctrl-K`, `Ctrl-U`)**:<br/>Duplicate the current line, cut it into an internal clipboard, and paste it below the cursor with full undo/redo support.
+
+- **Safe File Handling & Live Resizing**:<br/>Validates directories and permissions before entering raw terminal mode, opens new named buffers cleanly when a target file does not yet exist, scales the line-number gutter dynamically, and responds immediately to terminal resizes via SIGWINCH.
 
 ![TED-splash-0.7.0](images/TED-splash.png)
 
@@ -55,7 +67,8 @@ sudo make uninstall
 
 View the manual page at any time with:
 ```Bash
-man ted
+man ./ted.1   # Before installation
+man ted       # After installation
 ```
 
 ## Architecture
