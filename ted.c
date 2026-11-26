@@ -23,6 +23,8 @@
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
+#include <pwd.h>
 #include <signal.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -36,9 +38,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.7.2"
-#define TED_TAB_STOP 4
-#define TED_QUIT_TIMES 2
+#define TED_VERSION "0.7.3"
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
@@ -135,11 +135,25 @@ struct editorConfig {
     int in_undo_redo;               // Re-entrancy guard during replay
     char *clipboard;                // Internal line cut/paste buffer
     char *filename;
+    char *config_path;              // Optional explicit config file path (-c/--config)
     char statusmsg[256];
     time_t statusmsg_time;
     struct editorSyntax *syntax;
     struct termios orig_termios;
     volatile sig_atomic_t resized;
+
+    // Runtime configuration options (~/.tedrc)
+    int tab_stop;                   // Default: 4 (clamped 1..16)
+    int auto_indent;                // Default: 1
+    int line_numbers;               // Default: 1
+    int quit_times;                 // Default: 2 (clamped 0..10)
+    int color_comment;              // Default: 36 (Cyan)
+    int color_keyword;              // Default: 33 (Yellow)
+    int color_type;                 // Default: 32 (Green)
+    int color_string;               // Default: 35 (Magenta)
+    int color_number;               // Default: 31 (Red)
+    int color_match;                // Default: 34 (Blue)
+    int color_gutter;               // Default: 90 (Dim gray)
 };
 
 struct editorConfig E;
@@ -475,13 +489,13 @@ void editorUpdateSyntax(erow *row) {
 int editorSyntaxToColor(int hl) {
     switch (hl) {
         case HL_COMMENT:
-        case HL_MLCOMMENT: return 36; // Cyan
-        case HL_KEYWORD1:  return 33; // Yellow
-        case HL_KEYWORD2:  return 32; // Green
-        case HL_STRING:    return 35; // Magenta
-        case HL_NUMBER:    return 31; // Red
-        case HL_MATCH:     return 34; // Blue
-        default:           return 37; // White
+        case HL_MLCOMMENT: return E.color_comment;
+        case HL_KEYWORD1:  return E.color_keyword;
+        case HL_KEYWORD2:  return E.color_type;
+        case HL_STRING:    return E.color_string;
+        case HL_NUMBER:    return E.color_number;
+        case HL_MATCH:     return E.color_match;
+        default:           return 37;
     }
 }
 
@@ -579,7 +593,7 @@ int editorRowCxToRx(erow *row, int cx) {
     int rx = 0;
     for (int j = 0; j < cx; j++) {
         if (row->chars[j] == '\t') {
-            rx += (TED_TAB_STOP - 1) - (rx % TED_TAB_STOP);
+            rx += (E.tab_stop - 1) - (rx % E.tab_stop);
         }
         rx++;
     }
@@ -591,7 +605,7 @@ int editorRowRxToCx(erow *row, int rx) {
     int cx;
     for (cx = 0; cx < row->size; cx++) {
         if (row->chars[cx] == '\t') {
-            cur_rx += (TED_TAB_STOP - 1) - (cur_rx % TED_TAB_STOP);
+            cur_rx += (E.tab_stop - 1) - (cur_rx % E.tab_stop);
         }
         cur_rx++;
 
@@ -607,13 +621,13 @@ void editorUpdateRow(erow *row) {
     }
 
     free(row->render);
-    row->render = malloc(row->size + tabs * (TED_TAB_STOP - 1) + 1);
+    row->render = malloc(row->size + tabs * (E.tab_stop - 1) + 1);
 
     int idx = 0;
     for (int j = 0; j < row->size; j++) {
         if (row->chars[j] == '\t') {
             row->render[idx++] = ' ';
-            while (idx % TED_TAB_STOP != 0) row->render[idx++] = ' ';
+            while (idx % E.tab_stop != 0) row->render[idx++] = ' ';
         } else {
             row->render[idx++] = row->chars[j];
         }
@@ -909,22 +923,22 @@ void editorInsertNewline(void) {
     }
 
     erow *row = &E.row[E.cy];
-
-    // Measure leading spaces/tabs up to the cursor position
     int indent = 0;
-    while (indent < E.cx &&
-           (row->chars[indent] == ' ' || row->chars[indent] == '\t')) {
-        indent++;
-    }
-
-    // Check if the last non-whitespace character before cursor is '{'
     int extra_indent = 0;
-    int check = E.cx - 1;
-    while (check >= 0 && (row->chars[check] == ' ' || row->chars[check] == '\t')) {
-        check--;
-    }
-    if (check >= 0 && row->chars[check] == '{') {
-        extra_indent = TED_TAB_STOP;
+
+    if (E.auto_indent) {
+        while (indent < E.cx &&
+               (row->chars[indent] == ' ' || row->chars[indent] == '\t')) {
+            indent++;
+        }
+
+        int check = E.cx - 1;
+        while (check >= 0 && (row->chars[check] == ' ' || row->chars[check] == '\t')) {
+            check--;
+        }
+        if (check >= 0 && row->chars[check] == '{') {
+            extra_indent = E.tab_stop;
+        }
     }
 
     int total_indent = indent + extra_indent;
@@ -1081,7 +1095,7 @@ void editorDelWord(void) {
 }
 
 void editorIndent(void) {
-    int spaces = TED_TAB_STOP - (E.cx % TED_TAB_STOP);
+    int spaces = E.tab_stop - (E.cx % E.tab_stop);
     for (int i = 0; i < spaces; i++) {
         editorInsertChar(' ');
     }
@@ -1110,7 +1124,7 @@ void editorOutdent(void) {
         editorPushUndo(op);
         removed = 1;
     } else {
-        while (removed < TED_TAB_STOP && row->size > 0 && row->chars[0] == ' ') {
+        while (removed < E.tab_stop && row->size > 0 && row->chars[0] == ' ') {
             int before_cx = E.cx > removed ? E.cx - removed : 0;
             int after_cx = before_cx > 0 ? before_cx - 1 : 0;
 
@@ -1474,6 +1488,8 @@ void abFree(struct abuf *ab) {
 /*** output ***/
 
 int editorGutterWidth(void) {
+    if (!E.line_numbers) return 0;
+
     int lines = E.numrows > 0 ? E.numrows : 1;
     int digits = 0;
     while (lines > 0) {
@@ -1509,7 +1525,7 @@ void editorScroll(void) {
 
 void editorDrawRows(struct abuf *ab) {
     int gutter = editorGutterWidth();
-    int numwidth = gutter - 1;
+    int numwidth = gutter > 0 ? gutter - 1 : 0;
     int textcols = E.screencols - gutter;
     if (textcols < 0) textcols = 0;
 
@@ -1541,10 +1557,17 @@ void editorDrawRows(struct abuf *ab) {
     for (int y = 0; y < E.screenrows; y++) {
         int filerow = y + E.rowoff;
         if (filerow >= E.numrows) {
-            char gbuf[32];
-            int glen = snprintf(gbuf, sizeof(gbuf), "\x1b[90m%*s \x1b[39m",
-                                numwidth, "~");
-            abAppend(ab, gbuf, glen);
+            if (gutter > 0) {
+                char gbuf[32];
+                int glen = snprintf(gbuf, sizeof(gbuf), "\x1b[%dm%*s \x1b[39m",
+                                    E.color_gutter, numwidth, "~");
+                abAppend(ab, gbuf, glen);
+            } else {
+                char gbuf[32];
+                int glen = snprintf(gbuf, sizeof(gbuf), "\x1b[%dm~\x1b[39m",
+                                    E.color_gutter);
+                abAppend(ab, gbuf, glen);
+            }
 
             if (E.numrows == 0 &&
                 E.screenrows >= total_banner_rows + 2 &&
@@ -1572,10 +1595,12 @@ void editorDrawRows(struct abuf *ab) {
                 }
             }
         } else {
-            char gbuf[32];
-            int glen = snprintf(gbuf, sizeof(gbuf), "\x1b[90m%*d \x1b[39m",
-                                numwidth, filerow + 1);
-            abAppend(ab, gbuf, glen);
+            if (gutter > 0) {
+                char gbuf[32];
+                int glen = snprintf(gbuf, sizeof(gbuf), "\x1b[%dm%*d \x1b[39m",
+                                    E.color_gutter, numwidth, filerow + 1);
+                abAppend(ab, gbuf, glen);
+            }
 
             int len = E.row[filerow].rsize - E.coloff;
             if (len < 0) len = 0;
@@ -1702,6 +1727,195 @@ void editorSetStatusMessage(const char *fmt, ...) {
     E.statusmsg_time = time(NULL);
 }
 
+/*** config ***/
+
+static char *trimWhitespace(char *s) {
+    while (isspace((unsigned char)*s)) s++;
+    if (*s == '\0') return s;
+
+    char *end = s + strlen(s) - 1;
+    while (end > s && isspace((unsigned char)*end)) {
+        *end-- = '\0';
+    }
+    return s;
+}
+
+static int parseBool(const char *val, int *out) {
+    if (strcmp(val, "1") == 0 || strcasecmp(val, "true") == 0 ||
+        strcasecmp(val, "yes") == 0 || strcasecmp(val, "on") == 0) {
+        *out = 1;
+        return 1;
+    }
+    if (strcmp(val, "0") == 0 || strcasecmp(val, "false") == 0 ||
+        strcasecmp(val, "no") == 0 || strcasecmp(val, "off") == 0) {
+        *out = 0;
+        return 1;
+    }
+    return 0;
+}
+
+static int parseAnsiColor(const char *val, int *out) {
+    if (strcasecmp(val, "black") == 0)   { *out = 30; return 1; }
+    if (strcasecmp(val, "red") == 0)     { *out = 31; return 1; }
+    if (strcasecmp(val, "green") == 0)   { *out = 32; return 1; }
+    if (strcasecmp(val, "yellow") == 0)  { *out = 33; return 1; }
+    if (strcasecmp(val, "blue") == 0)    { *out = 34; return 1; }
+    if (strcasecmp(val, "magenta") == 0) { *out = 35; return 1; }
+    if (strcasecmp(val, "cyan") == 0)    { *out = 36; return 1; }
+    if (strcasecmp(val, "white") == 0)   { *out = 37; return 1; }
+    if (strcasecmp(val, "gray") == 0 || strcasecmp(val, "grey") == 0) {
+        *out = 90;
+        return 1;
+    }
+
+    char *endptr;
+    errno = 0;
+    long code = strtol(val, &endptr, 10);
+    if (errno != 0 || endptr == val || *endptr != '\0') return 0;
+
+    if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
+        *out = (int)code;
+        return 1;
+    }
+    return 0;
+}
+
+static int parseIntRange(const char *val, int min_v, int max_v, int *out) {
+    char *endptr;
+    errno = 0;
+    long n = strtol(val, &endptr, 10);
+    if (errno != 0 || endptr == val || *endptr != '\0') return 0;
+    if (n < min_v || n > max_v) return 0;
+    *out = (int)n;
+    return 1;
+}
+
+static int editorResolveConfigPath(char *out, size_t out_size, const char *override_path) {
+    if (override_path != NULL) {
+        return snprintf(out, out_size, "%s", override_path) < (int)out_size;
+    }
+
+    const char *home = getenv("HOME");
+    if (home == NULL || home[0] == '\0') {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != NULL) home = pw->pw_dir;
+    }
+    if (home == NULL || home[0] == '\0') return 0;
+
+    // Prefer ~/.tedrc if present; otherwise check $XDG_CONFIG_HOME/ted/tedrc
+    if (snprintf(out, out_size, "%s/.tedrc", home) < (int)out_size &&
+        access(out, R_OK) == 0) {
+        return 1;
+    }
+
+    const char *xdg = getenv("XDG_CONFIG_HOME");
+    if (xdg != NULL && xdg[0] != '\0') {
+        if (snprintf(out, out_size, "%s/ted/tedrc", xdg) < (int)out_size &&
+            access(out, R_OK) == 0) {
+            return 1;
+        }
+    } else if (snprintf(out, out_size, "%s/.config/ted/tedrc", home) < (int)out_size &&
+               access(out, R_OK) == 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+int editorLoadConfig(const char *override_path, int report_status) {
+    char path[PATH_MAX];
+    if (!editorResolveConfigPath(path, sizeof(path), override_path)) {
+        if (report_status) {
+            editorSetStatusMessage("No config file found (~/.tedrc)");
+        }
+        return 0;
+    }
+
+    FILE *fp = fopen(path, "r");
+    if (!fp) {
+        if (report_status || override_path != NULL) {
+            editorSetStatusMessage("Can't open config '%s': %s", path, strerror(errno));
+        }
+        return 0;
+    }
+
+    char line[512];
+    int lineno = 0;
+    int warnings = 0;
+
+    while (fgets(line, sizeof(line), fp) != NULL) {
+        lineno++;
+
+        char *comment = strpbrk(line, "#;");
+        if (comment) *comment = '\0';
+
+        char *trimmed = trimWhitespace(line);
+        if (*trimmed == '\0') continue;
+
+        char *eq = strchr(trimmed, '=');
+        if (!eq) {
+            warnings++;
+            editorSetStatusMessage("Config warning (%s:%d): missing '='", path, lineno);
+            continue;
+        }
+
+        *eq = '\0';
+        char *key = trimWhitespace(trimmed);
+        char *val = trimWhitespace(eq + 1);
+
+        int ok = 1;
+        if (strcmp(key, "tab_stop") == 0) {
+            ok = parseIntRange(val, 1, 16, &E.tab_stop);
+        } else if (strcmp(key, "auto_indent") == 0) {
+            ok = parseBool(val, &E.auto_indent);
+        } else if (strcmp(key, "line_numbers") == 0) {
+            ok = parseBool(val, &E.line_numbers);
+        } else if (strcmp(key, "quit_times") == 0) {
+            ok = parseIntRange(val, 0, 10, &E.quit_times);
+        } else if (strcmp(key, "color_comment") == 0) {
+            ok = parseAnsiColor(val, &E.color_comment);
+        } else if (strcmp(key, "color_keyword") == 0) {
+            ok = parseAnsiColor(val, &E.color_keyword);
+        } else if (strcmp(key, "color_type") == 0) {
+            ok = parseAnsiColor(val, &E.color_type);
+        } else if (strcmp(key, "color_string") == 0) {
+            ok = parseAnsiColor(val, &E.color_string);
+        } else if (strcmp(key, "color_number") == 0) {
+            ok = parseAnsiColor(val, &E.color_number);
+        } else if (strcmp(key, "color_match") == 0) {
+            ok = parseAnsiColor(val, &E.color_match);
+        } else if (strcmp(key, "color_gutter") == 0) {
+            ok = parseAnsiColor(val, &E.color_gutter);
+        } else {
+            warnings++;
+            editorSetStatusMessage("Config warning (%s:%d): unknown key '%s'",
+                                   path, lineno, key);
+            continue;
+        }
+
+        if (!ok) {
+            warnings++;
+            editorSetStatusMessage("Config warning (%s:%d): invalid value '%s' for %s",
+                                   path, lineno, val, key);
+        }
+    }
+
+    fclose(fp);
+
+    if (report_status && warnings == 0) {
+        editorSetStatusMessage("Reloaded config: %s", path);
+    }
+    return 1;
+}
+
+void editorReloadConfig(void) {
+    if (editorLoadConfig(E.config_path, 1)) {
+        for (int i = 0; i < E.numrows; i++) {
+            editorUpdateRow(&E.row[i]);
+        }
+    }
+}
+
 /*** input ***/
 
 char *editorPrompt(char *prompt, void (*callback)(char *, int)) {
@@ -1786,7 +2000,8 @@ void editorMoveCursor(int key) {
 }
 
 void editorProcessKeypress(void) {
-    static int quit_times = TED_QUIT_TIMES;
+    static int quit_times = -1;
+    if (quit_times == -1) quit_times = E.quit_times;
 
     int c = editorReadKey();
 
@@ -1831,6 +2046,10 @@ void editorProcessKeypress(void) {
 
         case CTRL_KEY('g'):
             editorGotoLine();
+            break;
+
+        case CTRL_KEY('r'):
+            editorReloadConfig();
             break;
 
         case CTRL_KEY('d'):
@@ -1910,7 +2129,7 @@ void editorProcessKeypress(void) {
             break;
     }
 
-    quit_times = TED_QUIT_TIMES;
+    quit_times = E.quit_times;
 }
 
 /*** cli & init ***/
@@ -1919,20 +2138,22 @@ void editorPrintUsage(const char *progname) {
     printf("Usage: %s [OPTION]... [FILE]\n"
            "Minimal zero-dependency terminal text editor.\n\n"
            "Options:\n"
-           "  -h, --help       Display this help message and exit\n"
-           "  -v, --version    Output version information and exit\n\n"
+           "  -c, --config FILE  Load configuration from FILE (default: ~/.tedrc)\n"
+           "  -h, --help         Display this help message and exit\n"
+           "  -v, --version      Output version information and exit\n\n"
            "Keybindings:\n"
-           "  Ctrl-S           Save buffer to disk\n"
-           "  Ctrl-F           Incremental search (Arrows to cycle, Esc to cancel)\n"
-           "  Ctrl-G           Jump to a specific line number\n"
-           "  Ctrl-D           Duplicate current line\n"
-           "  Ctrl-K / Ctrl-U  Cut current line / Paste line below cursor\n"
-           "  Ctrl-Z / Ctrl-Y  Undo / Redo\n"
-           "  Tab / Shift-Tab  Indent / Outdent line\n"
-           "  Ctrl-Left/Right  Jump backward / forward by word\n"
-           "  Ctrl-Backspace   Delete previous word\n"
-           "  Ctrl-Q           Quit (press 3x to discard unsaved changes)\n",
-           progname);
+           "  Ctrl-S             Save buffer to disk\n"
+           "  Ctrl-F             Incremental search (Arrows to cycle, Esc to cancel)\n"
+           "  Ctrl-G             Jump to a specific line number\n"
+           "  Ctrl-R             Reload ~/.tedrc configuration live\n"
+           "  Ctrl-D             Duplicate current line\n"
+           "  Ctrl-K / Ctrl-U    Cut current line / Paste line below cursor\n"
+           "  Ctrl-Z / Ctrl-Y    Undo / Redo\n"
+           "  Tab / Shift-Tab    Indent / Outdent line\n"
+           "  Ctrl-Left/Right    Jump backward / forward by word\n"
+           "  Ctrl-Backspace     Delete previous word\n"
+           "  Ctrl-Q             Quit (press %d more time(s) to discard unsaved changes)\n",
+           progname, 2);
 }
 
 void editorPrintVersion(void) {
@@ -1941,7 +2162,7 @@ void editorPrintVersion(void) {
            TED_VERSION);
 }
 
-void initEditor(void) {
+void initEditor(const char *config_path) {
     E.cx = 0;
     E.cy = 0;
     E.rx = 0;
@@ -1958,11 +2179,26 @@ void initEditor(void) {
     E.in_undo_redo = 0;
     E.clipboard = NULL;
     E.filename = NULL;
+    E.config_path = config_path ? strdup(config_path) : NULL;
     E.statusmsg[0] = '\0';
     E.statusmsg_time = 0;
     E.syntax = NULL;
     E.resized = 0;
 
+    // Default runtime settings (overridable via ~/.tedrc)
+    E.tab_stop = 4;
+    E.auto_indent = 1;
+    E.line_numbers = 1;
+    E.quit_times = 2;
+    E.color_comment = 36;
+    E.color_keyword = 33;
+    E.color_type = 32;
+    E.color_string = 35;
+    E.color_number = 31;
+    E.color_match = 34;
+    E.color_gutter = 90;
+
+    editorLoadConfig(E.config_path, 0);
     editorUpdateWindowSize();
 
     struct sigaction sa;
@@ -1977,6 +2213,7 @@ void initEditor(void) {
 
 int main(int argc, char *argv[]) {
     const char *filename = NULL;
+    const char *config_path = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -1985,6 +2222,13 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[i], "-v") == 0 || strcmp(argv[i], "--version") == 0) {
             editorPrintVersion();
             return 0;
+        } else if (strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--config") == 0) {
+            if (i + 1 >= argc) {
+                fprintf(stderr, "%s: option '%s' requires an argument\n",
+                        argv[0], argv[i]);
+                return 1;
+            }
+            config_path = argv[++i];
         } else if (strcmp(argv[i], "--") == 0) {
             if (i + 1 < argc) {
                 filename = argv[i + 1];
@@ -2001,12 +2245,14 @@ int main(int argc, char *argv[]) {
     }
 
     enableRawMode();
-    initEditor();
+    initEditor(config_path);
     if (filename != NULL) {
         editorOpen((char *)filename);
     }
 
-    editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-G = goto | Ctrl-Z/Y = undo/redo | Ctrl-Q = quit");
+    if (E.statusmsg[0] == '\0') {
+        editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-F = find | Ctrl-G = goto | Ctrl-Z/Y = undo/redo | Ctrl-Q = quit");
+    }
 
     while (1) {
         editorRefreshScreen();

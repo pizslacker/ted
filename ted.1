@@ -1,4 +1,4 @@
-.TH TED 1 "November 2026" "ted 0.7.2" "User Commands"
+.TH TED 1 "November 2026" "ted 0.7.3" "User Commands"
 .SH NAME
 ted \- minimal zero-dependency terminal text editor
 .SH SYNOPSIS
@@ -15,9 +15,16 @@ is specified,
 .B ted
 opens it for editing; otherwise, it starts with an empty buffer and displays a centered ASCII splash banner until text is entered.
 .PP
-Features include C/C++ syntax highlighting, matching bracket and parenthesis highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, soft-tab indentation and outdentation, line duplication and cut/paste, a dynamic line-number gutter, and live terminal window resizing via
+Features include C/C++ syntax highlighting, matching bracket and parenthesis highlighting, incremental search, an atomic undo/redo command stack, smart auto-indentation after opening braces, soft-tab indentation and outdentation, line duplication and cut/paste, a dynamic line-number gutter, runtime configuration via
+.IR ~/.tedrc ,
+and live terminal window resizing via
 .BR SIGWINCH .
 .SH OPTIONS
+.TP
+.BI \-c " FILE" "\fR, \fP" \-\-config " FILE"
+Load runtime configuration from
+.I FILE
+instead of the default search path.
 .TP
 .BR \-h ", " \-\-help
 Display a usage summary and keybinding reference, then exit.
@@ -34,12 +41,20 @@ Terminate option parsing. Useful when opening a file whose name begins with
 .B Ctrl-S
 Save the current buffer to disk. Prompts for a filename if the buffer has not been named yet.
 .TP
+.B Ctrl-R
+Reload the active configuration file
+.RI ( ~/.tedrc ,
+.IR $XDG_CONFIG_HOME/ted/tedrc ,
+or the path supplied to
+.BR \-\-config )
+and re-render all open rows immediately.
+.TP
 .B Ctrl-Q
 Quit
 .BR ted .
 If the buffer contains unsaved changes, pressing
 .B Ctrl-Q
-three times in succession is required to discard modifications and exit.
+the configured number of times (default: 2 additional presses) is required to discard modifications and exit.
 .SS Search & Navigation
 .TP
 .B Ctrl-F
@@ -76,14 +91,22 @@ Undo the last character insertion, deletion, word deletion, line split, line joi
 Redo the most recently undone edit.
 .TP
 .B Enter
-Insert a newline, preserving the current line's leading indentation and adding an extra 4-space indent level if the line ends with
+Insert a newline. When
+.B auto_indent
+is enabled, preserves the current line's leading indentation and adds an extra
+.B tab_stop
+indent level if the line ends with
 .BR { .
 .TP
 .B Tab
-Insert spaces up to the next 4-column tab stop.
+Insert spaces up to the next
+.B tab_stop
+column boundary.
 .TP
 .B Shift-Tab
-Outdent the current line by removing up to 4 leading spaces (or one leading tab character).
+Outdent the current line by removing up to
+.B tab_stop
+leading spaces (or one leading tab character).
 .TP
 .B Ctrl-D
 Duplicate the current line directly below the cursor.
@@ -102,33 +125,12 @@ Delete the previous word (or delimiter run) before the cursor.
 .TP
 .B Delete
 Delete the character under the cursor.
-.SH SYNTAX & BRACKET HIGHLIGHTING
+.SH CONFIGURATION
+At startup (and when pressing
+.BR Ctrl-R ),
 .B ted
-automatically enables C-family syntax highlighting (keywords, preprocessor directives, primitive types, strings, character literals, numbers, and single-line or multi-line comments) when editing files ending in
-.BR .c ,
-.BR .h ,
-or
-.BR .cpp .
-.PP
-Whenever the cursor rests on a delimiter
-.RB ( ( ", " ) ", " [ ", " ] ", " { ", or " } )
-outside of strings and comments,
-.B ted
-highlights both the delimiter under the cursor and its matching partner in bold reverse video.
-.SH EXIT STATUS
-.TP
-.B 0
-Normal exit via
-.BR Ctrl-Q ,
-.BR \-\-help ,
-or
-.BR \-\-version .
-.TP
-.B 1
-An invalid command-line option was passed, or a fatal terminal or file I/O error occurred.
-.SH AUTHOR
-Written by k!M (pizslacker).
-.SH SEE ALSO
-.BR vi (1),
-.BR nano (1),
-.BR termios (3)
+looks for a plain-text
+.B key = value
+configuration file in the following order unless overridden with
+.BR \-c / \-\-config :
+.IP
