@@ -31,6 +31,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 #include <termios.h>
 #include <time.h>
@@ -38,7 +39,7 @@
 
 /*** defines ***/
 
-#define TED_VERSION "0.7.3"
+#define TED_VERSION "0.7.5"
 #define CTRL_KEY(k) ((k) & 0x1f)
 
 enum editorKey {
@@ -2250,6 +2251,26 @@ int main(int argc, char *argv[]) {
         } else {
             filename = argv[i];
         }
+    }
+
+    if (filename != NULL) {
+        struct stat st;
+        if (stat(filename, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                fprintf(stderr, "%s: '%s': Is a directory\n", argv[0], filename);
+                return 1;
+            }
+        } else if (errno != ENOENT) {
+            fprintf(stderr, "%s: cannot open '%s': %s\n",
+                    argv[0], filename, strerror(errno));
+            return 1;
+        }
+    }
+
+    enableRawMode();
+    initEditor(config_path);
+    if (filename != NULL) {
+        editorOpen((char *)filename);
     }
 
     enableRawMode();
