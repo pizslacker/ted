@@ -67,7 +67,8 @@ sudo make uninstall
 
 View the manual page at any time with:
 ```Bash
-man ted
+man ./ted.1   # Before installation
+man ted       # After installation
 ```
 
 ## Architecture
