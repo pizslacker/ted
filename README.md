@@ -1,25 +1,61 @@
-# TinyEDitor
+# ted — TinyEDitor
 
-Minimal zero-dependency terminal text editor in standard C.
+Minimal, zero-dependency terminal text editor written in C99 using raw `termios` input and ANSI escape sequences.
+
+```text
+  _            _
+ | |_ ___   __| |
+ | __/ _ \ / _` |
+ | ||  __/| (_| |
+  \__\___| \__,_|
+
+TinyEDitor  v0.7.1
+```
+
+## Features
+- Zero External Dependencies: Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
+- C/C++ Syntax Highlighting: Highlights keywords, preprocessor directives, primitive types, strings, character literals, numbers (decimal, float, hex), and single-line (//) or multi-line (/* ... */) comments for .c, .h, and .cpp files.
+- Matching Bracket Highlighting: Automatically highlights matching ( ), [ ], and { } delimiters under the cursor while ignoring brackets inside strings and comments.
+- Incremental Search (Ctrl-F): Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
+- Atomic Undo / Redo (Ctrl-Z / Ctrl-Y): Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
+- Smart Indentation & Soft Tabs: Preserves leading indentation on Enter, adds an extra 4-space indent after {, and supports 4-space Tab alignment and Shift-Tab outdentation.
+- Dynamic Line-Number Gutter: Scales automatically with total file line count.
+- Live Terminal Resizing: Responds immediately to terminal window resizes via SIGWINCH.
 
 ![TED-splash-0.7.0](images/TED-splash.png)
 
-## Features
-- Tiny self-contained editor
-- Zero external dependencies
-- ~1599 LOC (_Lines-Of-Code_)
-- Centered ASCII splash banner
-- Live SIGWINCH window-resize handling
-- Dynamic line numbers
-- Live C syntax highlighting
-- Smart auto-indentation
-- Tab/Shift-Tab: Indent/Outdent
-- Ctrl-Z/Y: Undo/Redo
-- Ctrl-G: GOTO line
-- Word-level navigation
-- and incremental search (Ctrl-F).
+### Building & Installation
 
-![TED-0.7.0](images/TED.png)
+#### Build from Source
+```Bash
+make
+```
+#### Run
+```Bash
+./ted [OPTION]... [FILE]
+```
+
+Options:
+
+  - `-h`, `--help` — Display usage summary and keybinding reference
+  - `-v`, `--version` — Display version information
+  - -- — End option parsing (useful for opening filenames starting with -)
+
+### System-Wide Installation
+Installs the ted binary to `/usr/local/bin/ted` and the manpage to `/usr/local/share/man/man1/ted.1`:
+```Bash
+sudo make install
+```
+
+To uninstall:
+```Bash
+sudo make uninstall
+```
+
+View the manual page at any time with:
+```Bash
+man ted
+```
 
 ## Architecture
 
@@ -28,7 +64,7 @@ Building a text editor in C comes down to three key upfront architectural decisi
   - **UI Backend**
       > A terminal interface using raw ANSI escape sequences (like the classic kilo editor, under 1,000 lines of standard C with zero dependencies), an `ncurses` TUI, or a graphical window using SDL2 or GTK.
   
-  `ted` does not depend on `libcurses`, `SDL2` or `GTK`, it directly emits VT100 escapes on the terminal and uses raw input.
+  `ted` does not depend on `libcurses`, `SDL2` or `GTK`, it directly emits ANSI escape sequences on the terminal and uses raw input.
 
   - **Buffer Data Structure**
       > An array of row structs (simplest for getting a working prototype on screen fast), a gap buffer (ideal for local cursor insertions), or a piece table / rope (best for large files and unlimited undo/redo).
