@@ -24,6 +24,39 @@ TinyEDitor  v0.7.1
 
 ![TED-splash-0.7.0](images/TED-splash.png)
 
+### Building & Installation
+
+#### Build from Source
+```Bash
+make
+```
+#### Run
+```Bash
+./ted [OPTION]... [FILE]
+```
+
+Options:
+
+  - `-h`, `--help` — Display usage summary and keybinding reference
+  - `-v`, `--version` — Display version information
+  - -- — End option parsing (useful for opening filenames starting with -)
+
+### System-Wide Installation
+Installs the ted binary to `/usr/local/bin/ted` and the manpage to `/usr/local/share/man/man1/ted.1`:
+```Bash
+sudo make install
+```
+
+To uninstall:
+```Bash
+sudo make uninstall
+```
+
+View the manual page at any time with:
+```Bash
+man ted
+```
+
 ## Architecture
 
 Building a text editor in C comes down to three key upfront architectural decisions:
