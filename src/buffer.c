@@ -283,6 +283,7 @@ int editorDeleteActiveSelection(void) {
         .cy = sy,
         .cx = sx,
         .ch = 0,
+        .created_row = 0,
         .indent = NULL,
         .indent_len = 0,
         .old_text = old_text,
@@ -357,6 +358,9 @@ void editorUndo(void) {
     switch (op->type) {
         case OP_INSERT_CHAR:
             editorRowDelChar(&E.row[op->cy], op->cx);
+            if (op->created_row && E.row[op->cy].size == 0) {
+                editorDelRow(op->cy);
+            }
             break;
 
         case OP_DELETE_CHAR:
@@ -364,11 +368,15 @@ void editorUndo(void) {
             break;
 
         case OP_SPLIT_LINE: {
-            erow *next = &E.row[op->cy + 1];
-            char *tail = &next->chars[op->indent_len];
-            int tail_len = next->size - op->indent_len;
-            editorRowAppendString(&E.row[op->cy], tail, tail_len);
-            editorDelRow(op->cy + 1);
+            if (op->created_row) {
+                editorDelRow(op->cy);
+            } else {
+                erow *next = &E.row[op->cy + 1];
+                char *tail = &next->chars[op->indent_len];
+                int tail_len = next->size - op->indent_len;
+                editorRowAppendString(&E.row[op->cy], tail, tail_len);
+                editorDelRow(op->cy + 1);
+            }
             break;
         }
 

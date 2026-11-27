@@ -13,9 +13,11 @@ void editorInsertChar(int c) {
 
     int before_cx = E.cx;
     int before_cy = E.cy;
+    int created_row = 0;
 
     if (E.cy == E.numrows) {
         editorInsertRow(E.numrows, "", 0);
+        created_row = 1;
     }
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
     E.cx++;
@@ -25,6 +27,7 @@ void editorInsertChar(int c) {
         .cy = before_cy,
         .cx = before_cx,
         .ch = c,
+        .created_row = created_row,
         .indent = NULL,
         .indent_len = 0,
         .old_text = NULL,
@@ -46,9 +49,11 @@ void editorInsertNewline(void) {
 
     int before_cx = E.cx;
     int before_cy = E.cy;
+    int created_row = 0;
 
     if (E.cy == E.numrows) {
         editorInsertRow(E.cy, "", 0);
+        created_row = 1;
         E.cy++;
         E.cx = 0;
 
@@ -57,6 +62,7 @@ void editorInsertNewline(void) {
             .cy = before_cy,
             .cx = before_cx,
             .ch = 0,
+            .created_row = created_row,
             .indent = NULL,
             .indent_len = 0,
             .old_text = NULL,
@@ -127,6 +133,7 @@ void editorInsertNewline(void) {
         .cy = before_cy,
         .cx = before_cx,
         .ch = 0,
+        .created_row = 0,
         .indent = saved_indent,
         .indent_len = total_indent,
         .old_text = NULL,
@@ -162,6 +169,7 @@ void editorDelChar(void) {
             .cy = before_cy,
             .cx = E.cx,
             .ch = deleted_ch,
+            .created_row = 0,
             .indent = NULL,
             .indent_len = 0,
             .old_text = NULL,
@@ -188,6 +196,7 @@ void editorDelChar(void) {
             .cy = before_cy,
             .cx = join_col,
             .ch = 0,
+            .created_row = 0,
             .indent = NULL,
             .indent_len = 0,
             .old_text = NULL,
@@ -299,6 +308,7 @@ void editorIndent(void) {
             .cy = sy,
             .cx = 0,
             .ch = 0,
+            .created_row = 0,
             .indent = new_text,
             .indent_len = new_len,
             .old_text = old_text,
@@ -372,6 +382,7 @@ void editorOutdent(void) {
             .cy = sy,
             .cx = 0,
             .ch = 0,
+            .created_row = 0,
             .indent = new_text,
             .indent_len = new_len,
             .old_text = old_text,
@@ -402,6 +413,7 @@ void editorOutdent(void) {
             .cy = E.cy,
             .cx = 0,
             .ch = '\t',
+            .created_row = 0,
             .indent = NULL,
             .indent_len = 0,
             .old_text = NULL,
@@ -428,6 +440,7 @@ void editorOutdent(void) {
                 .cy = E.cy,
                 .cx = 0,
                 .ch = ' ',
+                .created_row = 0,
                 .indent = NULL,
                 .indent_len = 0,
                 .old_text = NULL,
@@ -476,6 +489,7 @@ void editorDuplicateLine(void) {
         .cy = E.cy,
         .cx = 0,
         .ch = 0,
+        .created_row = 0,
         .indent = copy,
         .indent_len = len,
         .old_text = NULL,
@@ -527,6 +541,7 @@ void editorCutLine(void) {
         .cy = before_cy,
         .cx = 0,
         .ch = 0,
+        .created_row = 0,
         .indent = saved,
         .indent_len = len,
         .old_text = NULL,
@@ -570,6 +585,7 @@ void editorPasteLine(void) {
         .cy = E.cy,
         .cx = 0,
         .ch = 0,
+        .created_row = 0,
         .indent = copy,
         .indent_len = len,
         .old_text = NULL,
@@ -629,6 +645,7 @@ void editorCutSelection(void) {
         .cy = sy,
         .cx = sx,
         .ch = 0,
+        .created_row = 0,
         .indent = NULL,
         .indent_len = 0,
         .old_text = text,
@@ -687,6 +704,7 @@ void editorPasteClipboard(void) {
         .cy = sy,
         .cx = sx,
         .ch = 0,
+        .created_row = 0,
         .indent = ins_copy,
         .indent_len = ins_len,
         .old_text = old_text,
