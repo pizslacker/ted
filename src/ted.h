@@ -80,6 +80,7 @@ typedef struct editOp {
     int cy;             // Start row index
     int cx;             // Start column index
     int ch;             // Character for INSERT_CHAR / DELETE_CHAR
+    int created_row;    // 1 if op auto-created row E.cy on an empty trailing line
     char *indent;       // Line payload, auto-indent prefix, or inserted range text
     int indent_len;     // Length of indent/inserted range text
     char *old_text;     // Removed range text for OP_REPLACE_RANGE

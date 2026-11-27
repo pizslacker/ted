@@ -160,6 +160,12 @@ int is_separator(int c) {
 }
 
 void editorUpdateSyntax(erow *row) {
+    if (row->rsize == 0) {
+        free(row->hl);
+        row->hl = NULL;
+        return;
+    }
+
     row->hl = realloc(row->hl, row->rsize);
     memset(row->hl, HL_NORMAL, row->rsize);
 
