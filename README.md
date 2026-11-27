@@ -39,6 +39,10 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 
 - **Safe File Handling & Live Resizing**:<br/>Validates directories and permissions before entering raw terminal mode, opens new named buffers cleanly when a target file does not yet exist, scales the line-number gutter dynamically, and responds immediately to terminal resizes via SIGWINCH.
 
+- **Headless C Unit Test Suite (`tests/test_ted.c`)**:<br/>Added a standalone unit test runner covering tab-to-render coordinate mapping, smart auto-indentation, visual selection range cut/paste, multi-line block indent/outdent, 7-language syntax and #! shebang detection, string/comment-aware bracket matching, ~/.tedrc config validation, and atomic save trailing-whitespace trimming.
+
+- **Build & Sanitizer Targets (`Makefile`)**:<br/>Added make check and make sanitize (compiling and running the test suite under -fsanitize=address,undefined with -Wall -Wextra -Werror -pedantic).
+
 ![TED-splash-0.7.0](images/TED-splash.png)
 
 ### Building & Installation
