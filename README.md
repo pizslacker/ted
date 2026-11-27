@@ -17,7 +17,7 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 
 - **Runtime Configuration (`~/.tedrc` & `Ctrl-R`)**:<br/>Customize tab width, auto-indentation, line numbers, quit confirmations, and ANSI syntax colors via `~/.tedrc` or `$XDG_CONFIG_HOME/ted/tedrc`, and reload changes live with `Ctrl-R`.
 
-- **Modularized Codebase (`src/`)**:<br/>Split single-file ted.c into src/ted.h and 7 focused translation units (`main.c`, `terminal.c`, `syntax.c`, `buffer.c`, `edit.c`, `fileio.c`, and `render.c`).
+- **Modularized Codebase (`src/`)**:<br/>Split single-file `ted.c` into `src/ted.h` and 7 focused translation units (`main.c`, `terminal.c`, `syntax.c`, `buffer.c`, `edit.c`, `fileio.c`, and `render.c`).
 
 - **Visual Selection & Range Clipboard (`Shift+Arrow`, Mouse Drag, `Ctrl-C/X/V`)**:<br/>Select arbitrary character or multi-line spans using `Shift+Arrow keys` or left-button mouse drag, copy (`Ctrl-C`), cut (`Ctrl-X`), and paste (`Ctrl-V`) with full atomic undo/redo support.
 
