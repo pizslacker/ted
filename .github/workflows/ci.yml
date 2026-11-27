@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (${{ matrix.cc }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        cc: [ gcc, clang ]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc clang make man-db groff-base
+
+      - name: Build ted with -Werror
+        run: |
+          make CC="${{ matrix.cc }}" CFLAGS="-std=c99 -O2 -Wall -Wextra -Werror -pedantic"
+
+      - name: Verify CLI flags (--version / --help)
+        run: |
+          ./ted --version
+          ./ted --help
+
+      - name: Run headless unit tests (make check)
+        run: |
+          make CC="${{ matrix.cc }}" CFLAGS="-std=c99 -O2 -Wall -Wextra -Werror -pedantic" check
+
+      - name: Run ASan + UBSan suite (make sanitize)
+        run: |
+          make CC="${{ matrix.cc }}" sanitize
