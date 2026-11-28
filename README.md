@@ -56,6 +56,7 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 | Go | .go | — | //, /* ... */ |
 | Zig | .zig | — | // |
 
+
 ![TED-splash-0.7.0](images/TED-splash.png)
 
 ### Building & Installation
