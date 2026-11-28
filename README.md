@@ -14,13 +14,13 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 ### Supported languages
 | LanguageMatched | Filenames / Extensions | Shebang Fallback | Comments |
 | :--- | :---: | :---: | ---: |
-| C / C++ | .c, .h, .cpp, .hpp, .cc | — | //, /* ... */ |
-| Python | .py, .pyw | #!...python... | #, """ ... """ |
-| Shell / Bash | .sh, .bash, .zsh | #!/bin/sh, #!...bash, #!...zsh | # |
-| Makefile | Makefile, makefile, GNUmakefile, .mk | — | # |
-| Rust | .rs | — | //, /* ... */ |
-| Go | .go | — | //, /* ... */ |
-| Zig | .zig | — | // |
+| C / C++ | `.c, .h, .cpp, .hpp, .cc` | — | `//, /* ... */` |
+| Python | `.py, .pyw` | `#!...python...` | `#, """ ... """` |
+| Shell / Bash | `.sh, .bash, .zsh` | `#!/bin/sh, #!...bash, #!...zsh` | `#` |
+| Makefile | `Makefile, makefile, GNUmakefile, .mk` | — | `#` |
+| Rust | `.rs` | — | `//, /* ... */` |
+| Go | `.go` | — | `//, /* ... */` |
+| Zig | `.zig` | — | `//` |
 
 ## Features
 - **Zero External Dependencies**:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
