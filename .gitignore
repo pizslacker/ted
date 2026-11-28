@@ -1,0 +1,35 @@
+---
+
+### 4. `.gitignore`
+
+```gitignore
+# Compiled binaries
+/ted
+/test_ted
+
+# Object and header dependency files
+src/*.o
+src/*.d
+tests/*.o
+tests/*.d
+
+# Atomic save temporary files
+.ted.tmp.*
+
+# Editor & OS artifacts
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Debian & RPM packaging build outputs
+/debian/ted/
+/debian/.debhelper/
+/debian/files
+/debian/*.debhelper.log
+/debian/*.substvars
+/*.deb
+/*.dsc
+/*.tar.*
+/*.buildinfo
+/*.changes
