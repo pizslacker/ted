@@ -148,9 +148,8 @@ ted/
 │   ├── edit.c          # Editing commands, clipboard, incremental search, goto line
 │   ├── fileio.c        # File open, atomic mkstemp+fsync+rename save, ~/.tedrc parser
 │   └── render.c        # Screen append buffer, gutter, scrolling, status/message bars
-├── tests/
-│   └── test_ted.c      # Headless C unit test suite
-└── debian/             # Debian/Ubuntu .deb packaging metadata
+└──  tests/
+    └── test_ted.c      # Headless C unit test suite
 ```
 
 ### License
