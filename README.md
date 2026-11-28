@@ -1,6 +1,6 @@
 # ted — TinyEDitor
 
-Minimal, zero-dependency terminal text editor written in C99 using raw `termios` input and ANSI escape sequences.
+Minimal, zero-dependency terminal text editor written in `C99` using raw `termios` input and ANSI escape sequences.
 
 ```text
   _            _
