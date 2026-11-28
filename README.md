@@ -11,6 +11,16 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 
   TinyEDitor  v1.0.0
 ```
+### Supported languages
+| LanguageMatched | Filenames / Extensions | Shebang Fallback | Comments |
+| :--- | :---: | :---: | ---: |
+| C / C++ | .c, .h, .cpp, .hpp, .cc | — | //, /* ... */ |
+| Python | .py, .pyw | #!...python... | #, """ ... """ |
+| Shell / Bash | .sh, .bash, .zsh | #!/bin/sh, #!...bash, #!...zsh | # |
+| Makefile | Makefile, makefile, GNUmakefile, .mk | — | # |
+| Rust | .rs | — | //, /* ... */ |
+| Go | .go | — | //, /* ... */ |
+| Zig | .zig | — | // |
 
 ## Features
 - **Zero External Dependencies**:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
@@ -44,18 +54,6 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 - **Headless C Unit Test Suite (`tests/test_ted.c`)**:<br/>Added a standalone unit test runner covering tab-to-render coordinate mapping, smart auto-indentation, visual selection range cut/paste, multi-line block indent/outdent, 7-language syntax and #! shebang detection, string/comment-aware bracket matching, ~/.tedrc config validation, and atomic save trailing-whitespace trimming.
 
 - **Build & Sanitizer Targets (`Makefile`)**:<br/>Added make check and make sanitize (compiling and running the test suite under -fsanitize=address,undefined with -Wall -Wextra -Werror -pedantic).
-
-### Supported languages
-| LanguageMatched | Filenames / Extensions | Shebang Fallback | Comments |
-| :--- | :---: | :---: | ---: |
-| C / C++ | .c, .h, .cpp, .hpp, .cc | — | //, /* ... */ |
-| Python | .py, .pyw | #!...python... | #, """ ... """ |
-| Shell / Bash | .sh, .bash, .zsh | #!/bin/sh, #!...bash, #!...zsh | # |
-| Makefile | Makefile, makefile, GNUmakefile, .mk | — | # |
-| Rust | .rs | — | //, /* ... */ |
-| Go | .go | — | //, /* ... */ |
-| Zig | .zig | — | // |
-
 
 ![TED-splash-0.7.0](images/TED-splash.png)
 
