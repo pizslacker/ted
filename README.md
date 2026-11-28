@@ -9,13 +9,15 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
  | ||  __/| (_| |
   \__\___| \__,_|
 
-  TinyEDitor  v0.9.5
+  TinyEDitor  v0.9.9
 ```
 
 ## Features
 - **Zero External Dependencies**:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
 
 - **Runtime Configuration (`~/.tedrc` & `Ctrl-R`)**:<br/>Customize tab width, auto-indentation, line numbers, quit confirmations, and ANSI syntax colors via `~/.tedrc` or `$XDG_CONFIG_HOME/ted/tedrc`, and reload changes live with `Ctrl-R`.
+
+- **`+LINE` Startup Jump in `src/main.c`**:<br/>Parses any +N argument (matching vi and nano, such as ted +42 src/main.c or ted src/main.c +42), validates that N is a positive integer before entering raw mode, clamps it to [1, E.numrows], and centers the target line vertically in the viewport once editorOpen() finishes.
 
 - **Modularized Codebase (`src/`)**:<br/>Split single-file `ted.c` into `src/ted.h` and 7 focused translation units (`main.c`, `terminal.c`, `syntax.c`, `buffer.c`, `edit.c`, `fileio.c`, and `render.c`).
 
