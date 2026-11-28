@@ -45,6 +45,16 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 
 - **Build & Sanitizer Targets (`Makefile`)**:<br/>Added make check and make sanitize (compiling and running the test suite under -fsanitize=address,undefined with -Wall -Wextra -Werror -pedantic).
 
+### Supported languages
+| LanguageMatched | Filenames / Extensions | Shebang Fallback | Comments |
+| C / C++ | .c, .h, .cpp, .hpp, .cc | — | //, /* ... */ |
+| Python | .py, .pyw | #!...python... | #, """ ... """ |
+| Shell / Bash | .sh, .bash, .zsh | #!/bin/sh, #!...bash, #!...zsh | # |
+| Makefile | Makefile, makefile, GNUmakefile, .mk | — | # |
+| Rust | .rs | — | //, /* ... */ |
+| Go | .go | — | //, /* ... */ |
+| Zig | .zig | — | // |
+
 ![TED-splash-0.7.0](images/TED-splash.png)
 
 ### Building & Installation
