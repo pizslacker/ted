@@ -30,7 +30,7 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 - **XTerm SGR Mouse Support**:<br/>Click anywhere in the text viewport to position the cursor (with full tab-stop and gutter awareness) and scroll smoothly using the mouse wheel.
 
 - **Multi-Language Syntax Highlighting & Shebang Detection**:<br/>Highlights keywords, directives, built-in types, strings, character literals, numbers (decimal, float, hex), and single-line or multi-line comments across C/C++, Python, Shell/Bash, Makefile, Rust, Go, and Zig—plus automatic `#!` shebang detection for extensionless scripts.
-- 
+
 - **Incremental Search (`Ctrl-F`)**:<br/>Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
 
 - **Atomic Undo / Redo (`Ctrl-Z` / `Ctrl-Y`)**:<br/>Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
