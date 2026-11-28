@@ -81,8 +81,10 @@ man ./ted.1   # Before installation
 man ted       # After installation
 ```
 
-### Memory & Undefined Behavior Safety:
+### Memory & Undefined Behavior Safety
+
 Every change touching buffer manipulation, undo/redo history, syntax scanning, or file I/O must pass both the standard test suite and the sanitizer suite:
+
 ```Bash
 make check
 make sanitize
