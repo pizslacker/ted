@@ -1,0 +1,39 @@
+# ==============================================================================
+# ted — Text EDitor Configuration File
+# ==============================================================================
+# Copy this file to ~/.tedrc or $XDG_CONFIG_HOME/ted/tedrc (usually
+# ~/.config/ted/tedrc). Press Ctrl-R inside ted to reload changes live.
+#
+# Comments begin with '#' or ';'.
+# Booleans accept: true/false, yes/no, on/off, or 1/0.
+# Colors accept standard ANSI SGR codes (30-37, 90-97) or names:
+#   black, red, green, yellow, blue, magenta, cyan, white, gray
+# ==============================================================================
+
+# Number of columns per tab stop (valid: 1..16, default: 4)
+tab_stop = 4
+
+# Preserve current line indentation on Enter and add one extra tab_stop
+# after lines ending with '{' (default: true)
+auto_indent = true
+
+# Display the left-hand line-number gutter (default: true)
+line_numbers = true
+
+# Strip trailing spaces and tabs from all lines when saving via Ctrl-S
+# (default: false)
+trim_trailing_whitespace = false
+
+# Extra Ctrl-Q presses required to discard unsaved changes (valid: 0..10, default: 2)
+quit_times = 2
+
+# ------------------------------------------------------------------------------
+# Syntax & UI Colors
+# ------------------------------------------------------------------------------
+color_comment = cyan
+color_keyword = yellow
+color_type    = green
+color_string  = magenta
+color_number  = red
+color_match   = blue
+color_gutter  = gray

@@ -6,6 +6,7 @@ LDFLAGS  ?=
 PREFIX   ?= /usr/local
 BINDIR   ?= $(PREFIX)/bin
 MANDIR   ?= $(PREFIX)/share/man/man1
+DOCDIR   ?= $(PREFIX)/share/doc/ted
 
 SRCS      := $(wildcard src/*.c)
 OBJS      := $(SRCS:.c=.o)
@@ -46,9 +47,10 @@ install: all
 	install -d $(DESTDIR)$(BINDIR) $(DESTDIR)$(MANDIR)
 	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/$(TARGET)
 	install -m 644 ted.1 $(DESTDIR)$(MANDIR)/ted.1
+	install -m 644 examples/tedrc $(DESTDIR)$(DOCDIR)/tedrc.example
 
 uninstall:
-	rm -f $(DESTDIR)$(BINDIR)/$(TARGET) $(DESTDIR)$(MANDIR)/ted.1
+	rm -f $(DESTDIR)$(BINDIR)/$(TARGET) $(DESTDIR)$(MANDIR)/ted.1 $(DESTDIR)$(DOCDIR)/tedrc.example
 
 clean:
 	rm -f $(TARGET) $(TEST_TARGET) $(OBJS) $(TEST_OBJ) $(DEPS)
