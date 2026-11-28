@@ -1,6 +1,7 @@
 #include "ted.h"
 
 #include <errno.h>
+#include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -9,9 +10,10 @@
 struct editorConfig E;
 
 static void editorPrintUsage(const char *progname) {
-    printf("Usage: %s [OPTION]... [FILE]\n"
+    printf("Usage: %s [OPTION]... [+LINE] [FILE]\n"
            "Minimal zero-dependency terminal text editor.\n\n"
            "Options:\n"
+           "  +LINE              Jump to 1-based LINE on startup (e.g., +42)\n"
            "  -c, --config FILE  Load configuration from FILE (default: ~/.tedrc)\n"
            "  -h, --help         Display this help message and exit\n"
            "  -v, --version      Output version information and exit\n\n"
@@ -98,9 +100,29 @@ static void initEditor(const char *config_path) {
     }
 }
 
+static void editorJumpToStartupLine(long target_line) {
+    if (target_line <= 0 || E.numrows == 0) return;
+
+    if (target_line > E.numrows) target_line = E.numrows;
+    E.cy = (int)(target_line - 1);
+    E.cx = 0;
+
+    if (E.cy >= E.screenrows) {
+        E.rowoff = E.cy - (E.screenrows / 2);
+        if (E.rowoff < 0) E.rowoff = 0;
+        if (E.rowoff > E.numrows - E.screenrows) {
+            E.rowoff = E.numrows - E.screenrows;
+            if (E.rowoff < 0) E.rowoff = 0;
+        }
+    }
+
+    editorSetStatusMessage("Jumped to line %ld", target_line);
+}
+
 int main(int argc, char *argv[]) {
     const char *filename = NULL;
     const char *config_path = NULL;
+    long startup_line = 0;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
@@ -121,6 +143,16 @@ int main(int argc, char *argv[]) {
                 filename = argv[i + 1];
             }
             break;
+        } else if (argv[i][0] == '+' && argv[i][1] != '\0') {
+            char *endptr;
+            errno = 0;
+            long val = strtol(&argv[i][1], &endptr, 10);
+            if (errno != 0 || *endptr != '\0' || val < 1 || val > INT_MAX) {
+                fprintf(stderr, "%s: invalid line number '%s'\n",
+                        argv[0], argv[i]);
+                return 1;
+            }
+            startup_line = val;
         } else if (argv[i][0] == '-') {
             fprintf(stderr, "%s: unrecognized option '%s'\n"
                             "Try '%s --help' for more information.\n",
@@ -149,6 +181,9 @@ int main(int argc, char *argv[]) {
     initEditor(config_path);
     if (filename != NULL) {
         editorOpen((char *)filename);
+        if (startup_line > 0) {
+            editorJumpToStartupLine(startup_line);
+        }
     }
 
     if (E.statusmsg[0] == '\0') {

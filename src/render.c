@@ -235,13 +235,32 @@ static void editorDrawRows(struct abuf *ab) {
 static void editorDrawStatusBar(struct abuf *ab) {
     abAppend(ab, "\x1b[7m", 4);
 
-    char status[80], rstatus[80];
-    int len = snprintf(status, sizeof(status), "%.20s - %d lines %s",
-                       E.filename ? E.filename : "[No Name]", E.numrows,
-                       E.dirty ? "(modified)" : "");
-    int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d",
+    char sel_info[32] = "";
+    int sy = 0, sx = 0, ey = 0, ex = 0;
+    if (editorGetSelectionBounds(&sy, &sx, &ey, &ex)) {
+        if (sy == ey) {
+            int chars = ex - sx;
+            snprintf(sel_info, sizeof(sel_info), " (%d %s sel)",
+                     chars, chars == 1 ? "char" : "chars");
+        } else {
+            int lines = (ey - sy) + ((ex > 0) ? 1 : 0);
+            snprintf(sel_info, sizeof(sel_info), " (%d %s sel)",
+                     lines, lines == 1 ? "line" : "lines");
+        }
+    }
+
+    char status[128], rstatus[80];
+    int len = snprintf(status, sizeof(status), "%.24s - %d lines %s%s",
+                       E.filename ? E.filename : "[No Name]",
+                       E.numrows,
+                       E.dirty ? "(modified)" : "",
+                       sel_info);
+    int rlen = snprintf(rstatus, sizeof(rstatus), "%s | Ln %d/%d, Col %d",
                         E.syntax ? E.syntax->filetype : "no ft",
-                        E.cy + 1, E.numrows);
+                        E.numrows > 0 ? E.cy + 1 : 0,
+                        E.numrows,
+                        E.rx + 1);
+
     if (len > E.screencols) len = E.screencols;
     abAppend(ab, status, len);
 
