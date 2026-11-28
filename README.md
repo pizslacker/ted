@@ -15,20 +15,22 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 ## Features
 - **Zero External Dependencies**:<br/>Built purely on standard C99 and POSIX (termios, ioctl, sigaction)—no ncurses or third-party libraries required.
 
-- **Runtime Configuration (`~/.tedrc` & `Ctrl-R`)**:<br/>Customize tab width, auto-indentation, line numbers, quit confirmations, and ANSI syntax colors via `~/.tedrc` or `$XDG_CONFIG_HOME/ted/tedrc`, and reload changes live with `Ctrl-R`.
+- **Matching Bracket Highlighting**:<br/>Automatically highlights matching `( )`, `[ ]`, and `{ }` delimiters under the cursor while ignoring brackets inside strings and comments.
 
-- **`+LINE` Startup Jump in `src/main.c`**:<br/>Parses any +N argument (matching vi and nano, such as ted +42 src/main.c or ted src/main.c +42), validates that N is a positive integer before entering raw mode, clamps it to [1, E.numrows], and centers the target line vertically in the viewport once editorOpen() finishes.
+- **Status Bar Readouts & `+LINE` Startup Jump**:<br/>Displays active filetype, 1-based line and visual column (Ln Y/Total, Col X), and live selection counts ((N chars sel) / (N lines sel)), plus +LINE startup jumping (ted +42 src/main.c).
 
 - **Modularized Codebase (`src/`)**:<br/>Split single-file `ted.c` into `src/ted.h` and 7 focused translation units (`main.c`, `terminal.c`, `syntax.c`, `buffer.c`, `edit.c`, `fileio.c`, and `render.c`).
+
+- **Crash-Safe Atomic Saves & Save Hygiene**:<br/>Writes atomically via sibling mkstemp() + fsync() + rename() while preserving file permissions (st_mode) and symlink targets, warns before overwriting externally modified files (st_mtime), and optionally strips trailing whitespace (trim_trailing_whitespace).
+
+- **Runtime Configuration (`~/.tedrc` & `Ctrl-R`)**:<br/>Customize tab width, auto-indentation, line numbers, quit confirmations, and ANSI syntax colors via `~/.tedrc` or `$XDG_CONFIG_HOME/ted/tedrc`, and reload changes live with `Ctrl-R`.
 
 - **Visual Selection & Range Clipboard (`Shift+Arrow`, Mouse Drag, `Ctrl-C/X/V`)**:<br/>Select arbitrary character or multi-line spans using `Shift+Arrow keys` or left-button mouse drag, copy (`Ctrl-C`), cut (`Ctrl-X`), and paste (`Ctrl-V`) with full atomic undo/redo support.
 
 - **XTerm SGR Mouse Support**:<br/>Click anywhere in the text viewport to position the cursor (with full tab-stop and gutter awareness) and scroll smoothly using the mouse wheel.
 
 - **Multi-Language Syntax Highlighting & Shebang Detection**:<br/>Highlights keywords, directives, built-in types, strings, character literals, numbers (decimal, float, hex), and single-line or multi-line comments across C/C++, Python, Shell/Bash, Makefile, Rust, Go, and Zig—plus automatic `#!` shebang detection for extensionless scripts.
-
-- **Matching Bracket Highlighting**:<br/>Automatically highlights matching `( )`, `[ ]`, and `{ }` delimiters under the cursor while ignoring brackets inside strings and comments.
-
+- 
 - **Incremental Search (`Ctrl-F`)**:<br/>Searches the buffer live as you type, cycles forward/backward across matches with arrow keys, and restores your original cursor and scroll position on Esc.
 
 - **Atomic Undo / Redo (`Ctrl-Z` / `Ctrl-Y`)**:<br/>Reverses and replays character edits, word deletions, line splits, and line joins while keeping dirty-buffer status synchronized with disk saves.
@@ -38,8 +40,6 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 - **Dynamic Line-Number Gutter**:<br/>Scales automatically with total file line count.
 
 - **Line Manipulation (`Ctrl-D`, `Ctrl-K`, `Ctrl-U`)**:<br/>Duplicate the current line, cut it into an internal clipboard, and paste it below the cursor with full undo/redo support.
-
-- **Safe File Handling & Live Resizing**:<br/>Validates directories and permissions before entering raw terminal mode, opens new named buffers cleanly when a target file does not yet exist, scales the line-number gutter dynamically, and responds immediately to terminal resizes via SIGWINCH.
 
 - **Headless C Unit Test Suite (`tests/test_ted.c`)**:<br/>Added a standalone unit test runner covering tab-to-render coordinate mapping, smart auto-indentation, visual selection range cut/paste, multi-line block indent/outdent, 7-language syntax and #! shebang detection, string/comment-aware bracket matching, ~/.tedrc config validation, and atomic save trailing-whitespace trimming.
 
