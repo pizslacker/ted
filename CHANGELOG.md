@@ -13,7 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Repository Governance & Sample Configuration:** Added `LICENSE` (GPL-3.0-or-later), `CHANGELOG.md`, `CONTRIBUTING.md`, `.gitignore`, and `examples/tedrc`.
 
 ### Changed
-- Bumped `TED_VERSION` to `1.0.0` across `src/ted.h`, `ted.1`, `README.md`, and Debian packaging metadata.
+- Bumped `TED_VERSION` to `1.0.0` across `src/ted.h`, `ted.1`, `README.md`.
 
 ## [0.9.1] - 2026-11-27
 
