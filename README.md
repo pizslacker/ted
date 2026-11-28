@@ -132,6 +132,27 @@ Building a text editor in C comes down to three key upfront architectural decisi
   
   For `ted`'s current scope (source files up to tens of thousands of lines, live C syntax highlighting, and zero external dependencies), the array-of-`erows` design is the cleanest fit because line indexing, scrolling, and per-line syntax state map 1-to-1 to terminal rows.
 
+
+#### Project Structure
+```text
+ted/
+├── Makefile            # Build, test, sanitize, and install targets
+├── ted.1               # Manual page
+├── examples/tedrc      # Commented sample configuration file
+├── src/
+│   ├── ted.h           # Shared structs, enums, and module prototypes
+│   ├── main.c          # CLI flag parsing (+LINE, --config), stat() check, event loop
+│   ├── terminal.c      # Raw termios setup, XTerm SGR mouse/key decoder, SIGWINCH
+│   ├── syntax.c        # Multi-language syntax highlighter & bracket matcher
+│   ├── buffer.c        # Row buffer, selection bounds, range ops, atomic undo/redo
+│   ├── edit.c          # Editing commands, clipboard, incremental search, goto line
+│   ├── fileio.c        # File open, atomic mkstemp+fsync+rename save, ~/.tedrc parser
+│   └── render.c        # Screen append buffer, gutter, scrolling, status/message bars
+├── tests/
+│   └── test_ted.c      # Headless C unit test suite
+└── debian/             # Debian/Ubuntu .deb packaging metadata
+```
+
 ### License
 
 This project is open-source software licensed under the GNU General Public License v3.0 (GPLv3). See the [LICENSE](LICENSE) file for terms and conditions.
