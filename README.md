@@ -47,6 +47,7 @@ Minimal, zero-dependency terminal text editor written in C99 using raw `termios`
 
 ### Supported languages
 | LanguageMatched | Filenames / Extensions | Shebang Fallback | Comments |
+| :--- | :---: | :---: | ---: |
 | C / C++ | .c, .h, .cpp, .hpp, .cc | — | //, /* ... */ |
 | Python | .py, .pyw | #!...python... | #, """ ... """ |
 | Shell / Bash | .sh, .bash, .zsh | #!/bin/sh, #!...bash, #!...zsh | # |
